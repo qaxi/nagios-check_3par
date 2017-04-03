@@ -1,0 +1,517 @@
+#!/bin/bash
+
+# 3PAR Nagios check script v0.5
+# Last update 2010/05/14 fredl@3par.com
+# Last update 2011/03/03 ddu@antemeta.fr
+# Last update 2015/01/26 by "emil" via https://exchange.nagios.org 3PAR-check-script
+# Last update 2015/07/29 pashol
+# Last update 2015/09/17 qaxi@seznam.cz
+# Last update 2016/12/16 yves.vaccarezza@corsedusud.fr
+# Last update 2017/03/23 qaxi@seznam.cz https://github.com/qaxi/nagios-check_3par
+#
+# This script is provided "as is" without warranty of any kind and 3PAR 
+# specifically disclaims all implied warranties of merchantability, 
+# non-infringement and fitness for a particular purpose. In no event shall 
+# 3PAR have any liability arising out of or related to 
+# customer's 'use of the script including lost data, lost profits, or any 
+# direct or indirect, incidental, special, or 
+# consequential damages arising there from.
+# In addition, 3PAR reserves the right not to perform fixes or updates 
+# to this script
+#
+#
+# Usage : check_3par 3PAR Username Command
+#
+# Supported commands 
+#    check_pd : 	Check status of physical disks
+#        Degraded ->		Warning
+#        Failed -> 		Critical
+#
+#    check_node :    Check status of controller nodes
+#        Degraded -> 	Warning
+#        Failed ->  	 	Critical
+#
+#    check_ld :	Check status of logical disks
+#        Degraded ->    	Warning
+#        Failed ->      	Critical
+#
+#    check_vv : 	Check status of virtual volumes
+#        Degraded ->    	Warning
+#        Failed ->      	Critical
+#
+#    check_port_fc : Check status of FC ports
+#        loss_sync ->	Warning
+#        config_wait ->	Warning
+#        login_wait ->	Warning
+#        non_participate ->	Warning
+#        error ->		Critical
+#
+#    check_cap_ssd : Check used SSD capacity
+#        >= $PCWARNINGSSD ->     Warning
+#        >= $PCCRITICALSSD ->    Critical
+#
+#    check_cap_fc : 	Check used FC capacity
+#        >= $PCWARNINGFC ->     	Warning
+#        >= $PCCRITICALFC ->     Critical
+#
+#    check_cap_nl : Check used NL capacity 
+#        >= $PCWARNINGNL ->      Warning
+#        >= $PCCRITICALNL ->     Critical
+#
+#    check_ps_node : Check Power Supply Node
+#        Degraded -> Warning
+#        Failed ->   Critical
+#
+#    check_ps_cage : Check Power Supply Cage
+#        Degraded -> Warning
+#        Failed ->   Critical
+#
+#    check_volume VOLUMENAME : Check status of volume
+#        Degraded ->    	Warning
+#        Failed ->      	Critical
+#
+#    check_qw QWIP : Check status of quorum witness
+#        loss_sync ->	Critical
+#        error ->		Critical
+
+if [ "$1" == "" ] || [ "$2" == "" ] || [ "$3" == "" ]
+then
+    echo Invalid usage : check_3par 3PAR Username/passwordfile Command
+    exit 3
+fi
+
+#           -V version (--version)
+#           -h help (--help)
+#           -t timeout (--timeout)
+#           -w warning threshold (--warning)
+#           -c critical threshold (--critical)
+#           -H hostname (--hostname)
+#           -v verbose (--verbose)
+# 
+#           -C SNMP community (--community)
+#           -a authentication password (--authentication)
+#           -l login name (--logname)
+#           -p port or password (--port or --passwd/--password)monitors operational
+#           -u url or username (--url or --username)
+# 
+# -? option, or any other unparsable set
+
+
+# 0 OK The plugin was able to check the service and it appeared to be functioning properly
+# 1 Warning The plugin was able to check the service, but it appeared to be above some "warning" threshold or did not appear to be working properly
+# 2 Critical The plugin detected that either the service was not running or it was above some "critical" threshold
+# 3 Unknown Invalid command line arguments were supplied to the plugin or low-level failures 
+
+# -v
+# 0 Single line, minimal output. Summary
+# 1 Single line, additional information (eg list processes that fail)
+# 2 Multi line, configuration debug output (eg ps command used)
+# 3 Lots of detail for plugin problem diagnosis
+
+INSERV=$1
+USERNAME=$2
+COMMAND=$3
+VMFS=$4
+QWIP=$4
+TMPOUT=""
+PCCRITICALFC=90
+PCWARNINGFC=80
+PCCRITICALNL=90
+PCWARNINGNL=80
+PCCRITICALSSD=90
+PCWARNINGSSD=80
+CRITICAL=90
+WARNING=80
+
+# To connect using the 3PAR CLI, uncomment the following line
+#3PARCLI="/opt/3PAR/inform_cli_2.3.1/bin/cli"
+#CONNECTCOMMAND="$3PARCLI -sys $INSERV -pwf $USERNAME"
+# Note : connecting using the CLI requires creating password files (.pwf)
+
+# To connect using SSH. uncomment the following line
+CONNECTCOMMAND="ssh $USERNAME@$INSERV"
+# Note : connecting using SSH requires setting public key authentication
+
+if [ "$COMMAND" == "check_pd" ]
+then
+    TMPOUT=$( $CONNECTCOMMAND showpd -showcols Id,State -nohdtot 2>&1 )
+    if [ $? -gt 0 ]
+    then
+        echo Could not connect to 3PAR "$INSERV"
+        exit 3
+    fi
+
+    if [ $( echo "$TMPOUT" | grep -c failed ) -gt 0 ]
+    then
+        echo CRITICAL! The following PDs have abnormal status : $( echo "$TMPOUT" | grep -v normal | tr -d '\n' )
+        exit 2
+    else
+        if [ $( echo "$TMPOUT" | grep -c failed ) -gt 0 ]
+        then	
+            echo WARNING! The following PDs have abnormal status : $( echo "$TMPOUT" | grep -v normal | tr -d '\n' )
+            exit 1
+        else
+            echo OK : All PDs have normal status
+            exit 0
+        fi
+    fi
+fi
+
+
+if [ "$COMMAND" == "check_node" ]
+then
+    TMPOUT=$( $CONNECTCOMMAND shownode -s -nohdtot 2>&1 )
+    if [ $? -gt 0 ]
+    then
+        echo Could not connect to 3PAR $INSERV
+        exit 3
+    fi
+
+    if [ $( echo "$TMPOUT" | grep -c -i failed ) -gt 0 ]
+    then
+        echo CRITICAL! The following nodes have abnormal status : $( echo "$TMPOUT" | grep -i failed | tr -s " " | tr -d '\n' )
+        exit 2
+    else
+        if [ $( echo "$TMPOUT" | grep -c -i degraded ) -gt 0 ]
+        then
+            echo WARNING! The following nodes have abnormal status : $( echo "$TMPOUT" | grep -i degraded | tr -s " " | tr -d '\n' )
+            exit 1
+        else
+            echo OK : All nodes have normal status
+            exit 0
+        fi
+    fi
+fi
+
+if [ "$COMMAND" == "check_ps_node" ] || [ "$COMMAND" == "check_ps" ]
+then
+    TMPOUT=$( $CONNECTCOMMAND shownode -ps 2>&1 )
+    if [ $? -gt 0 ]
+    then
+        echo Could not connect to 3PAR $INSERV
+        RC=3
+    fi
+
+    if [ $( echo "$TMPOUT" | grep -c -i failed ) -gt 0 ]
+    then
+        echo CRITICAL! The following nodes have abnormal status : $( echo "$TMPOUT" | grep -i failed | tr -s " " | tr -d '\n' )
+        RC=2
+    else
+        if [ $( echo "$TMPOUT" | grep -c -i degraded ) -gt 0 ]
+        then
+            echo WARNING! The following nodes have abnormal status : $( echo "$TMPOUT" | grep -i degraded | tr -s " " | tr -d '\n' )
+            RC=1
+        else
+            echo OK : All nodes have normal status
+            RC=0
+        fi
+    fi
+    exit $RC
+fi
+
+if [ "$COMMAND" == "check_ps_cage" ]
+then
+    TMPOUT=$( $CONNECTCOMMAND showcage -d 2>&1 )
+    if [ $? -gt 0 ]
+    then
+        echo Could not connect to 3PAR $INSERV
+        RC=3
+    fi
+
+    if [ $( echo "$TMPOUT" | awk '{ if ($0 ~ "------Cage") cage=$5; if ($0 ~ "Failed") print cage" "$0}' | wc -l ) -gt 0 ]
+    then
+        echo CRITICAL! The following cages have abnormal status : $( echo "$TMPOUT" | awk '{ if ($0 ~ "------Cage") cage=$5; if ($0 ~ "Failed") print cage" "$0}' | tr -s " " | tr -d '\n' )
+        RC=2
+    else
+        if [ $( echo "$TMPOUT" | awk '{ if ($0 ~ "------Cage") cage=$5; if ($0 ~ "Degraded") print cage" "$0}' | wc -l ) -gt 0 ]
+        then
+            echo WARNING! The following cages have abnormal status : $( echo "$TMPOUT" | awk '{ if ($0 ~ "------Cage") cage=$5; if ($0 ~ "Degraded") print cage" "$0}' | tr -s " " | tr -d '\n' )
+            RC=1
+        else
+            echo OK : All nodes have normal status
+            RC=0
+        fi
+    fi
+    exit $RC
+fi
+
+if [ "$COMMAND" == "check_vv" ]
+then
+    TMPOUT=$( $CONNECTCOMMAND showvv -showcols Name,State -notree -nohdtot 2>&1 )
+    if [ $? -gt 0 ]
+    then
+        echo Could not connect to 3PAR $INSERV
+        exit 3
+    fi
+
+    if [ $( echo "$TMPOUT" | grep -c -i failed ) -gt 0 ]
+    then
+        echo CRITICAL! There are failed VVs. Contact 3PAR support
+        exit 2
+    else
+        if [ $( echo "$TMPOUT" | grep -c -i degraded ) -gt 0 ]
+        then
+            echo WARNING! There are degraded VVs. Contact 3PAR support
+            exit 1
+        else
+            echo OK : All VVs are normal
+            exit 0
+        fi
+    fi
+fi
+
+
+if [ "$COMMAND" == "check_ld" ]
+then
+    TMPOUT=$( $CONNECTCOMMAND showld -state -nohdtot 2>&1 )
+    if [ $? -gt 0 ]
+    then
+        echo Could not connect to 3PAR $INSERV
+        exit 3
+    fi
+
+    if [ $( echo "$TMPOUT" | grep -c -i failed ) -gt 0 ]
+    then
+        echo CRITICAL! There are failed LDs. Contact 3PAR support
+        exit 2
+    else
+        if [ $( echo "$TMPOUT" | grep -c -i degraded ) -gt 0 ]
+        then
+            echo WARNING! There are degraded LDs. Contact 3PAR support
+            exit 1
+        else
+            echo OK : All LDs have normal status
+            exit 0
+        fi
+    fi
+fi
+
+if [ "$COMMAND" == "check_port_fc" ]
+then
+    TMPOUT=$( $CONNECTCOMMAND showport -nohdtot 2>&1 )
+    if [ $? -gt 0 ]
+    then
+        echo Could not connect to 3PAR $INSERV
+        exit 3
+    fi
+    TMPOUT=$( echo "$TMPOUT" | grep -v -i iscsi 2>&1 | grep -v -i rcip 2>&1 )
+
+    if [ $( echo "$TMPOUT" | grep -c -i error ) -gt 0 ]
+    then
+        echo CRITICAL! Some ports are in the error state
+        exit 2
+    else
+        if [ $( echo "$TMPOUT" | grep -c -i loss_sync ) -gt 0 ] || [ $( echo "$TMPOUT" | grep -c -i config_wait ) -gt 0 ] || [ $( echo "$TMPOUT" | grep -c -i login_wait ) -gt 0 ] || [ $( echo "$TMPOUT" | grep -c -i non_participate ) -gt 0 ]
+        then
+            echo WARNING! Some ports are in an abnormal state \(loss_sync, config_wait, login_wait or non_participate\)
+            exit 1
+        else
+            echo OK : All FC ports have normal status \(ready or offline\)
+            exit 0
+        fi
+    fi
+fi
+
+
+if [ "$COMMAND" == "check_cap_ssd" ]
+then
+    TMPOUT=$( $CONNECTCOMMAND showpd -p -devtype SSD -showcols Size_MB,Free_MB -csvtable 2>&1 )
+    if [ $? -gt 0 ]
+    then
+        echo Could not connect to 3PAR $INSERV
+        exit 3
+    fi
+
+    LASTLINE=$( echo "$TMPOUT" | tail -1 )
+    if [ "$LASTLINE" = "No PDs listed" ] || [ "$LASTLINE" = "0,0" ]
+    then
+        echo No SSD disks
+        exit 0
+    fi
+
+    TOTCAPSSD=$( echo "$TMPOUT" | tail -1 | cut -d, -f1 )
+    FREECAPSSD=$( echo "$TMPOUT" | tail -1 | cut -d, -f2 )
+    USEDCAPPCSSD="$(( 100 - ( ( $FREECAPSSD * 100 ) / $TOTCAPSSD ) ))"
+    USEDCAPSSD=$((($TOTCAPSSD-$FREECAPSSD)))
+    WARNCAPSSDRAW=$(($TOTCAPSSD*$PCWARNINGSSD/100))
+    CRITCAPSSDRAW=$(($TOTCAPSSD*$PCCRITICALSSD/100))
+    #TOTCAPSSDGB=$(($TOTCAPSSD/1024))
+
+    if [ "$USEDCAPPCSSD" -ge "$PCCRITICALSSD" ]
+    then
+        echo CRITICAL! Used SSD capacity = $USEDCAPPCSSD\% \( \> $PCCRITICALSSD\% \)\|UsedSpace=$USEDCAPPCSSD\%\;$PCWARNINGSSD\;$PCCRITICALSSD UsedSpace=$USEDCAPSSD\MB\;$WARNCAPSSDRAW\;$CRITCAPSSDRAW\;0\;$TOTCAPSSD
+        exit 2
+    else
+        if [ "$USEDCAPPCSSD" -ge "$PCWARNINGSSD" ]
+        then
+            echo WARNING! Used SSD capacity = $USEDCAPPCSSD\% \( \> $PCWARNINGSSD\% \)\|UsedSpace=$USEDCAPPCSSD\%\;$PCWARNINGSSD\;$PCCRITICALSSD UsedSpace=$USEDCAPSSD\MB\;$WARNCAPSSDRAW\;$CRITCAPSSDRAW\;0\;$TOTCAPSSD
+            exit 1
+        else
+
+            echo OK : Used SSD capacity = $USEDCAPPCSSD\%\|UsedSpace=$USEDCAPPCSSD\%\;$PCWARNINGSSD\;$PCCRITICALSSD UsedSpace=$USEDCAPSSD\MB\;$WARNCAPSSDRAW\;$CRITCAPSSDRAW\;0\;$TOTCAPSSD
+            exit 0
+        fi
+    fi
+fi
+
+
+if [ "$COMMAND" == "check_cap_fc" ]
+then
+    TMPOUT=$( $CONNECTCOMMAND showpd -p -devtype FC -showcols Size_MB,Free_MB -csvtable 2>&1 )
+    if [ $? -gt 0 ]
+    then
+        echo Could not connect to 3PAR $INSERV
+        exit 3
+    fi
+
+    LASTLINE=$( echo "$TMPOUT" | tail -1 )
+    if [ "$LASTLINE" = "No PDs listed" ] || [ "$LASTLINE" = "0,0" ]
+    then
+        echo No FC disks
+        exit 0
+    fi
+
+    TOTCAPFC=$( echo "$TMPOUT" | tail -1 | cut -d, -f1 )
+    FREECAPFC=$( echo "$TMPOUT" | tail -1 | cut -d, -f2 )
+    USEDCAPPCFC="$(( 100 - ( ( $FREECAPFC * 100 ) / $TOTCAPFC ) ))"
+    USEDCAPFC=$((($TOTCAPFC-$FREECAPFC)))
+    WARNCAPFCRAW=$(($TOTCAPFC*$PCWARNINGFC/100))
+    CRITCAPFCRAW=$(($TOTCAPFC*$PCCRITICALFC/100))
+    #TOTCAPFCGB=$(($TOTCAPFC/1024))
+
+    if [ "$USEDCAPPCFC" -ge "$PCCRITICALFC" ]
+    then
+        echo CRITICAL! Used FC capacity = $USEDCAPPCFC\% \( \> $PCCRITICALFC\% \)\|UsedSpace=$USEDCAPPCFC\%\;$PCWARNINGFC\;$PCCRITICALFC UsedSpace=$USEDCAPFC\MB\;$WARNCAPFCRAW\;$CRITCAPFCRAW\;0\;$TOTCAPFC
+        exit 2
+    else
+        if [ "$USEDCAPPCFC" -ge "$PCWARNINGFC" ]
+        then
+            echo WARNING! Used FC capacity = $USEDCAPPCFC\% \( \> $PCWARNINGFC\% \)\|UsedSpace=$USEDCAPPCFC\%\;$PCWARNINGFC\;$PCCRITICALFC UsedSpace=$USEDCAPFC\MB\;$WARNCAPFCRAW\;$CRITCAPFCRAW\;0\;$TOTCAPFC
+            exit 1
+        else
+
+            echo OK : Used FC capacity = $USEDCAPPCFC\%\|UsedSpace=$USEDCAPPCFC\%\;$PCWARNINGFC\;$PCCRITICALFC UsedSpace=$USEDCAPFC\MB\;$WARNCAPFCRAW\;$CRITCAPFCRAW\;0\;$TOTCAPFC
+            exit 0
+        fi
+    fi
+fi
+
+if [ "$COMMAND" == "check_cap_nl" ]
+then
+    TMPOUT=$( $CONNECTCOMMAND showpd -p -devtype NL -showcols Size_MB,Free_MB -csvtable 2>&1 )
+    if [ $? -gt 0 ]
+    then
+        echo Could not connect to 3PAR $INSERV
+        exit 3
+    fi
+
+    LASTLINE=$(echo "$TMPOUT" | tail -1 )
+    if [ "$LASTLINE" = "No PDs listed" ] || [ "$LASTLINE" = "0,0" ]
+    then
+        echo No NL disks
+        exit 0
+    fi
+
+    TOTCAPNL=$( echo "$TMPOUT" | tail -1 | cut -d, -f1 )
+    FREECAPNL=$( echo "$TMPOUT" | tail -1 | cut -d, -f2 )
+    USEDCAPPCNL="$(( 100 - ( ( $FREECAPNL * 100 ) / $TOTCAPNL ) ))"
+
+    if [ "$USEDCAPPCNL" -ge "$PCCRITICALNL" ]
+    then
+        echo CRITICAL! Used NL capacity = $USEDCAPPCNL\% \( \> $PCCRITICALNL\% \)
+        exit 2
+    else
+        if [ "$USEDCAPPCNL" -ge "$PCWARNINGNL" ]
+        then
+            echo WARNING! Used NL capacity = $USEDCAPPCNL\% \( \> $PCWARNINGNL\% \)
+            exit 1
+        else
+            echo OK : Used NL capacity = $USEDCAPPCNL\%
+            exit 0
+        fi
+    fi
+fi
+
+if [ $COMMAND == "check_volume" ]
+then
+
+    if [ "$VMFS" == "" ]
+    then
+        echo "Command 'check_volume' needs VOLUMENAME as additional parameter."
+        exit 3
+    fi
+
+    TMPOUT=$( $CONNECTCOMMAND showvv -csvtable 2>&1 )
+    if [ $? -gt 0 ]
+    then
+        echo "Could not connect to 3PAR $INSERV"
+        exit 3
+    fi
+
+    VSIZE=$( echo "$TMPOUT" | grep ${VMFS} | cut -d, -f12)
+    VSIZE_Gb="$((  ( $VSIZE / 1024 ) ))"
+
+    USED=$( echo "$TMPOUT" | grep ${VMFS} | cut -d, -f11)
+    USED_Gb="$((  ( $USED / 1024 ) ))"
+
+    FREE="$((  ( $VSIZE - $USED ) ))"
+    FREE_Gb="$((  ( $FREE / 1024 ) ))"
+
+    FREEPERCENT="$((  100 - ( ( $USED * 100 ) / $VSIZE ) ))"
+    USEDPERCENT="$((  100 - ( $FREEPERCENT ) ))"
+
+    WARNCRAW="$(( $VSIZE*$WARNING/100))"
+    WARNCRAW_Gb="$((  ( $WARNCRAW / 1024 ) ))"
+
+    CRITCCRAW="$(( $VSIZE*$CRITICAL/100 ))"
+    CRITCCRAW_Gb="$((  ( $CRITCCRAW / 1024 ) ))"
+
+
+    if [ $USED_Gb -ge $CRITCCRAW_Gb ]
+    then
+        echo "CRITICAL! TOTAL: $VSIZE Mb USED: $USED Mb ($USED-PERCENT% ) FREE: $FREE Mb ($FREE-PERCENT ) TotSize=$VSIZE_Gb Gb Used=$USED_Gb Gb , Seuil Warn Used : $WARNCRAW_Gb Gb , Seuil Used Crit : $CRITCCRAW_Gb Gb"
+        exit 2
+    else
+        if [ $USED_Gb -ge $WARNCRAW_Gb ]
+        then
+            echo "WARNING! TOTAL: $VSIZE Mb USED: $USED Mb ($USED-PERCENT% ) FREE: $FREE Mb ($FREE-PERCENT ) TotSize=$VSIZE_Gb Gb Used=$USED_Gb Gb , Seuil Warn Used : $WARNCRAW_Gb Gb , Seuil Crit Used : $CRITCCRAW_Gb Gb"
+            exit 1
+        else
+
+            echo "OK : TOTAL: $VSIZE Mb USED: $USED Mb ($USEDPERCENT% ) FREE: $FREE Mb ($FREEPERCENT% ) TotSize=$VSIZE_Gb Gb Used=$USED_Gb Gb , Seuil Warn Used : $WARNCRAW_Gb Gb , Seuil Crit Used : $CRITCCRAW_Gb Gb"
+            exit 0
+        fi
+    fi
+fi 
+
+if [ "$COMMAND" == "check_qw" ]
+then
+    if [ "$QWIP" == "" ]
+    then
+        echo "Command 'check_qw' needs QW IP as additional parameter."
+        exit 3
+    fi
+
+    TMPOUT=$( $CONNECTCOMMAND showrcopy -qw targets 2>&1 )
+    if [ $? -gt 0 ]
+    then
+        echo "Could not connect to 3PAR $INSERV"
+        exit 3
+    fi
+
+    if [ $( echo "$TMPOUT" | grep -c -i $QWIP | grep Started | wc -l ) -gt 0 ]
+    then
+        echo "OK : Quorum Witness normal status"
+        exit 0
+    else
+        echo "WARNING! Quorum Witness has problems"
+        echo " $TMPOUT "
+        exit 1
+    fi
+fi
+
+echo "ERROR Wrong command \""$COMMAND"\" ."
+exit 128
+
+
+# vim: tabstop=4 softtabstop=4 shiftwidth=4 expandtab:
