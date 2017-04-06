@@ -519,11 +519,10 @@ then
         exit 3
     fi
 
-    TMPOUT=$( echo "$TMPOUT" | grep "tpvv,base," | grep "${CMDARG1}" )
+    TMPOUT=$( echo "$TMPOUT" | grep ",base," | grep ",${CMDARG1}," )
 
     VSIZE=$( echo "$TMPOUT" | cut -d, -f12 )
-
-    VSIZE_Gb=$((VSIZE/1024))
+    VSIZE_Gb="$(( $VSIZE / 1024 ))"
 
     USED=$( echo "$TMPOUT" | cut -d, -f11 )
     USED_Gb="$(( $USED / 1024 ))"
