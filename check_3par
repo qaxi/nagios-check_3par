@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# 3PAR Nagios check script v0.5
+# 3PAR Nagios check script v1.0
 # Last update 2010/05/14 fredl@3par.com
 # Last update 2011/03/03 ddu@antemeta.fr
 # Last update 2015/01/26 by "emil" via https://exchange.nagios.org 3PAR-check-script
 # Last update 2015/07/29 pashol
 # Last update 2015/09/17 qaxi@seznam.cz
 # Last update 2016/12/16 yves.vaccarezza@corsedusud.fr
-# Last update 2017/03/23 qaxi@seznam.cz https://github.com/qaxi/nagios-check_3par
+# Last update 2017/04/06 qaxi@seznam.cz https://github.com/qaxi/nagios-check_3par
 #
 # This script is provided "as is" without warranty of any kind and 3PAR 
 # specifically disclaims all implied warranties of merchantability, 
@@ -20,7 +20,7 @@
 # to this script
 #
 
-VERSION="0.5"
+VERSION="1.0"
 CAPWARN=80  # warning at 80% of used disc capacity
 CAPCRIT=90  # warnint at 90% of user disc capacity
 
