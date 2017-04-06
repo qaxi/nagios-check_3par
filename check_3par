@@ -36,7 +36,7 @@ function usage() {
     echo "${PRGNAME} ERROR: $*"
     echo ""
 }
-
+exit
 echo "${PRGNAME} v${VERSION} (https://github.com/qaxi/nagios-check_3par)
 Copyright (c) 2010-2017 various developers - look in source code
 
@@ -519,37 +519,40 @@ then
         exit 3
     fi
 
-    VSIZE=$( echo "$TMPOUT" | grep ${CMDARG1} | cut -d, -f12)
-    VSIZE_Gb="$((  ( $VSIZE / 1024 ) ))"
+    TMPOUT=$( echo "$TMPOUT" | grep ",base," | grep ",${CMDARG1}," )
 
-    USED=$( echo "$TMPOUT" | grep ${CMDARG1} | cut -d, -f11)
-    USED_Gb="$((  ( $USED / 1024 ) ))"
+    VSIZE=$( echo "$TMPOUT" | cut -d, -f12 )
+    VSIZE_Gb="$(( $VSIZE / 1024 ))"
 
-    FREE="$((  ( $VSIZE - $USED ) ))"
-    FREE_Gb="$((  ( $FREE / 1024 ) ))"
+    USED=$( echo "$TMPOUT" | cut -d, -f11 )
+    USED_Gb="$(( $USED / 1024 ))"
+
+    FREE="$(( $VSIZE - $USED ))"
+    FREE_Gb="$(( $FREE / 1024 ))"
 
     FREEPERCENT="$((  100 - ( ( $USED * 100 ) / $VSIZE ) ))"
     USEDPERCENT="$((  100 - ( $FREEPERCENT ) ))"
 
     WARNCRAW="$(( $VSIZE*$WARNING/100))"
-    WARNCRAW_Gb="$((  ( $WARNCRAW / 1024 ) ))"
+    WARNCRAW_Gb="$(( $WARNCRAW / 1024 ))"
 
     CRITCCRAW="$(( $VSIZE*$CRITICAL/100 ))"
-    CRITCCRAW_Gb="$((  ( $CRITCCRAW / 1024 ) ))"
+    CRITCCRAW_Gb="$(( $CRITCCRAW / 1024 ))"
 
+    MSG="TOTAL: ${VSIZE}Mb USED: ${USED}Mb ($USEDPERCENT%) FREE: ${FREE}Mb ($FREEPERCENT%) TotSize=${VSIZE_Gb}Gb Used=${USED_Gb}Gb, Warn on used: ${WARNCRAW_Gb}Gb, Critical on Used: ${CRITCCRAW_Gb}Gb"
 
     if [ $USED_Gb -ge $CRITCCRAW_Gb ]
     then
-        echo "CRITICAL! TOTAL: $VSIZE Mb USED: $USED Mb ($USED-PERCENT% ) FREE: $FREE Mb ($FREE-PERCENT ) TotSize=$VSIZE_Gb Gb Used=$USED_Gb Gb , Seuil Warn Used : $WARNCRAW_Gb Gb , Seuil Used Crit : $CRITCCRAW_Gb Gb"
+        echo "CRITICAL: $MSG"
         exit 2
     else
         if [ $USED_Gb -ge $WARNCRAW_Gb ]
         then
-            echo "WARNING! TOTAL: $VSIZE Mb USED: $USED Mb ($USED-PERCENT% ) FREE: $FREE Mb ($FREE-PERCENT ) TotSize=$VSIZE_Gb Gb Used=$USED_Gb Gb , Seuil Warn Used : $WARNCRAW_Gb Gb , Seuil Crit Used : $CRITCCRAW_Gb Gb"
+            echo "WARNING: $MSG"
             exit 1
         else
 
-            echo "OK : TOTAL: $VSIZE Mb USED: $USED Mb ($USEDPERCENT% ) FREE: $FREE Mb ($FREEPERCENT% ) TotSize=$VSIZE_Gb Gb Used=$USED_Gb Gb , Seuil Warn Used : $WARNCRAW_Gb Gb , Seuil Crit Used : $CRITCCRAW_Gb Gb"
+            echo "OK: $MSG"
             exit 0
         fi
     fi
