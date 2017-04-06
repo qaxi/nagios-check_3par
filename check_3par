@@ -19,88 +19,159 @@
 # In addition, 3PAR reserves the right not to perform fixes or updates 
 # to this script
 #
-#
-# Usage : check_3par 3PAR Username Command
-#
-# Supported commands 
-#    check_pd : 	Check status of physical disks
-#        Degraded ->		Warning
-#        Failed -> 		Critical
-#
-#    check_node :    Check status of controller nodes
-#        Degraded -> 	Warning
-#        Failed ->  	 	Critical
-#
-#    check_ld :	Check status of logical disks
-#        Degraded ->    	Warning
-#        Failed ->      	Critical
-#
-#    check_vv : 	Check status of virtual volumes
-#        Degraded ->    	Warning
-#        Failed ->      	Critical
-#
-#    check_port_fc : Check status of FC ports
-#        loss_sync ->	Warning
-#        config_wait ->	Warning
-#        login_wait ->	Warning
-#        non_participate ->	Warning
-#        error ->		Critical
-#
-#    check_cap_ssd : Check used SSD capacity
-#        >= $PCWARNINGSSD ->     Warning
-#        >= $PCCRITICALSSD ->    Critical
-#
-#    check_cap_fc : 	Check used FC capacity
-#        >= $PCWARNINGFC ->     	Warning
-#        >= $PCCRITICALFC ->     Critical
-#
-#    check_cap_nl : Check used NL capacity 
-#        >= $PCWARNINGNL ->      Warning
-#        >= $PCCRITICALNL ->     Critical
-#
-#    check_ps_node : Check Power Supply Node
-#        Degraded -> Warning
-#        Failed ->   Critical
-#
-#    check_ps_cage : Check Power Supply Cage
-#        Degraded -> Warning
-#        Failed ->   Critical
-#
-#    check_volume VOLUMENAME : Check status of volume
-#        Degraded ->    	Warning
-#        Failed ->      	Critical
-#
-#    check_qw QWIP : Check status of quorum witness
-#        loss_sync ->	Critical
-#        error ->		Critical
 
-if [ "$1" == "" ] || [ "$2" == "" ] || [ "$3" == "" ]
-then
-    echo Invalid usage : check_3par 3PAR Username/passwordfile Command
-    exit 3
-fi
+VERSION="0.5"
+CAPWARN=80  # warning at 80% of used disc capacity
+CAPCRIT=90  # warnint at 90% of user disc capacity
 
-#           -V version (--version)
-#           -h help (--help)
-#           -t timeout (--timeout)
-#           -w warning threshold (--warning)
-#           -c critical threshold (--critical)
-#           -H hostname (--hostname)
-#           -v verbose (--verbose)
-# 
-#           -C SNMP community (--community)
-#           -a authentication password (--authentication)
-#           -l login name (--logname)
-#           -p port or password (--port or --passwd/--password)monitors operational
-#           -u url or username (--url or --username)
-# 
-# -? option, or any other unparsable set
+PRGNAME=$(basename "$0")
 
+DBG="n"
+function dbg() { [ "$DBG" = "y" ] && echo "DBG: $*" >&2 ; }
+
+OPTS=':hH:i:u:p:w:c:d-:'   # first : and lsast - is mandatory
+function usage() {
+[ -n "$*" ] && {
+    exec 1>&2   # redirect STDOUT to STDERR for rest of script
+    echo "${PRGNAME} ERROR: $*"
+    echo ""
+}
+
+echo "${PRGNAME} v${VERSION} (https://github.com/qaxi/nagios-check_3par)
+Copyright (c) 2010-2017 various developers - look in source code
+
+This plugin contains tests 3PAR disc array statuses.
+
+Usage: ${PRGNAME} -h | -H <3PAR> [-d] [-u <username>] [-i <inform_cli> [-p <password_file>]] [-w <warning>] [-c <critical>] COMMAND [ arg [arg ...]]
+
+Options:
+    -h, --help 
+                Print detailed help screen
+    -H, --hostname=ADDRESS 
+                3PAR controler
+    -i, --inform-bin=PATH
+                Path to 3PAR Inform CLI. Default connection method is SSH.
+    -u, --username=USER
+                3PAR username
+    -p, --password-file=PATH
+                Password file for 3PAR Inform CLI
+    -w, --warning=TRESHOLD (default: 80)
+                Warning treshold
+    -c, --critical=TRESHOLD (default: 90)
+                Critical treshold
+    -d, --debug
+                Turn on debugging
+
+Supported commands
+
+   check_pd :   Check status of physical disks
+                   Degraded ->      Warning
+                   Failed ->        Critical
+
+   check_node :    Check status of controller nodes
+                   Degraded ->      Warning
+                   Failed ->        Critical
+
+   check_ld :   Check status of logical disks
+                   Degraded ->      Warning
+                   Failed ->        Critical
+
+   check_vv :   Check status of virtual volumes
+                   Degraded ->      Warning
+                   Failed ->        Critical
+
+   check_port_fc : Check status of FC ports
+                   loss_sync ->     Warning
+                   config_wait ->   Warning
+                   login_wait ->    Warning
+                   non_participate ->   Warning
+                   error ->         Critical
+
+   check_cap_ssd : Check used SSD capacity
+                   >= $CAPWARN ->         Warning
+                   >= $CAPCRIT ->         Critical
+
+   check_cap_fc :   Check used FC capacity
+                   >= $CAPWARN ->         Warning
+                   >= $CAPCRIT ->         Critical
+
+   check_cap_nl : Check used NL capacity 
+                   >= $CAPWARN ->         Warning
+                   >= $CAPCRIT ->         Critical
+
+   check_ps_node : Check Power Supply Node
+                   Degraded ->      Warning
+                   Failed ->        Critical
+
+   check_ps_cage : Check Power Supply Cage
+                   Degraded ->      Warning
+                   Failed ->        Critical
+
+   check_volume <VOLUMENAME> : Check status of volume
+                   Degraded ->      Warning
+                   Failed ->        Critical
+
+   check_qw <QWIP> : Check status of quorum witness
+                   loss_sync ->     Critical
+                   error ->         Critical
+
+"
+exit 128
+
+}
+
+[ "$#" = 0 ] &&  usage "Too few arguments."
+
+while getopts "$OPTS" OPTION ; do
+    dbg "option $OPTION optind $OPTIND optarg $OPTARG"
+    case "$OPTION" in
+        d  ) DBG="y";;
+        h  ) usage ;;   
+        H  ) INSERV="$OPTARG" ;;
+        i  ) INFORMBIN="$OPTARG" ;;
+        u  ) USERNAME="$OPTARG" ;;
+        p  ) PASSFILE="$OPTARG" ;;
+        w  ) CAPWARN="$OPTARG" ;;
+        c  ) CAPCRIT="$OPTARG" ;;
+        -  ) [ $OPTIND -ge 1 ] && optind=$(expr $OPTIND - 1 ) || optind=$OPTIND
+            eval OPTION="\$$optind"
+            OPTARG=$(echo $OPTION | cut -d'=' -f2)
+            OPTION=$(echo $OPTION | cut -d'=' -f1)
+            dbg "- option $OPTION optind $OPTIND optarg $OPTARG"
+            case $OPTION in
+                --debug )           DBG="y" ;;
+                --help )            usage ;;
+                --hostname )        INSERV="$OPTARG" ;;
+                --inform-bin )      INFORMBIN="$OPTARG" ;;
+                --username )        USERNAME="$OPTARG" ;;
+                --password-file )   USERNAME="$OPTARG" ;;
+                --warning )         CAPWARN="$OPTARG" ;;
+                --critical )        CAPCRIT="$OPTARG" ;;
+                ?  )  usage "Invalid option '$OPTARG'" ;;
+                *  )  usage "parsing options failed";;
+            esac
+            #OPTIND=1
+            #shift
+            ;;
+        ?  )  usage "Invalid option '$OPTARG'"  ;;
+        *  )  usage "parsing options failed";;
+    esac
+done
+
+shift $((OPTIND-1))
+
+dbg "3PAR command: $*"
+dbg OPTION: $OPTION OPTIND: $OPTIND OPTARG: $OPTARG
 
 # 0 OK The plugin was able to check the service and it appeared to be functioning properly
 # 1 Warning The plugin was able to check the service, but it appeared to be above some "warning" threshold or did not appear to be working properly
 # 2 Critical The plugin detected that either the service was not running or it was above some "critical" threshold
 # 3 Unknown Invalid command line arguments were supplied to the plugin or low-level failures 
+
+RETOK=0
+RETWARN=1
+RETCRIT=2
+RETUNKN=3
 
 # -v
 # 0 Single line, minimal output. Summary
@@ -108,29 +179,29 @@ fi
 # 2 Multi line, configuration debug output (eg ps command used)
 # 3 Lots of detail for plugin problem diagnosis
 
-INSERV=$1
-USERNAME=$2
-COMMAND=$3
-VMFS=$4
-QWIP=$4
+COMMAND="$1"
+CMDARG1="$2"
 TMPOUT=""
-PCCRITICALFC=90
-PCWARNINGFC=80
-PCCRITICALNL=90
-PCWARNINGNL=80
-PCCRITICALSSD=90
-PCWARNINGSSD=80
-CRITICAL=90
-WARNING=80
+PCCRITICALFC="$CAPCRIT"
+PCWARNINGFC="$CAPWARN"
+PCCRITICALNL="$CAPCRIT"
+PCWARNINGNL="$CAPWARN"
+PCCRITICALSSD="$CAPCRIT"
+PCWARNINGSSD="$CAPWARN"
+CRITICAL="$CAPCRIT"
+WARNING="$CAPWARN"
 
-# To connect using the 3PAR CLI, uncomment the following line
-#3PARCLI="/opt/3PAR/inform_cli_2.3.1/bin/cli"
-#CONNECTCOMMAND="$3PARCLI -sys $INSERV -pwf $USERNAME"
-# Note : connecting using the CLI requires creating password files (.pwf)
-
-# To connect using SSH. uncomment the following line
-CONNECTCOMMAND="ssh $USERNAME@$INSERV"
-# Note : connecting using SSH requires setting public key authentication
+# CLI or SSH
+if [ -n "$INFORMBIN" ]
+then
+    # To connect using the 3PAR CLI, use option -i and -p to setup the command 
+    CONNECTCOMMAND="$INFORMBIN -sys $INSERV -pwf $PASSFILE"
+    # Note : connecting using the CLI requires creating password files (.pwf)
+else
+    # To connect using SSH use -u option to set username
+    # Note : connecting using SSH requires setting public key authentication
+    CONNECTCOMMAND="ssh $USERNAME@$INSERV"
+fi
 
 if [ "$COMMAND" == "check_pd" ]
 then
@@ -147,7 +218,7 @@ then
         exit 2
     else
         if [ $( echo "$TMPOUT" | grep -c failed ) -gt 0 ]
-        then	
+        then    
             echo WARNING! The following PDs have abnormal status : $( echo "$TMPOUT" | grep -v normal | tr -d '\n' )
             exit 1
         else
@@ -435,7 +506,7 @@ fi
 if [ $COMMAND == "check_volume" ]
 then
 
-    if [ "$VMFS" == "" ]
+    if [ "$CMDARG1" == "" ]
     then
         echo "Command 'check_volume' needs VOLUMENAME as additional parameter."
         exit 3
@@ -448,10 +519,10 @@ then
         exit 3
     fi
 
-    VSIZE=$( echo "$TMPOUT" | grep ${VMFS} | cut -d, -f12)
+    VSIZE=$( echo "$TMPOUT" | grep ${CMDARG1} | cut -d, -f12)
     VSIZE_Gb="$((  ( $VSIZE / 1024 ) ))"
 
-    USED=$( echo "$TMPOUT" | grep ${VMFS} | cut -d, -f11)
+    USED=$( echo "$TMPOUT" | grep ${CMDARG1} | cut -d, -f11)
     USED_Gb="$((  ( $USED / 1024 ) ))"
 
     FREE="$((  ( $VSIZE - $USED ) ))"
@@ -486,7 +557,7 @@ fi
 
 if [ "$COMMAND" == "check_qw" ]
 then
-    if [ "$QWIP" == "" ]
+    if [ "$CMDARG1" == "" ]
     then
         echo "Command 'check_qw' needs QW IP as additional parameter."
         exit 3
@@ -499,7 +570,7 @@ then
         exit 3
     fi
 
-    if [ $( echo "$TMPOUT" | grep -c -i $QWIP | grep Started | wc -l ) -gt 0 ]
+    if [ $( echo "$TMPOUT" | grep -c -i $CMDARG1 | grep Started | wc -l ) -gt 0 ]
     then
         echo "OK : Quorum Witness normal status"
         exit 0
@@ -510,7 +581,7 @@ then
     fi
 fi
 
-echo "ERROR Wrong command \""$COMMAND"\" ."
+usage "ERROR Wrong command '$COMMAND' ."
 exit 128
 
 
