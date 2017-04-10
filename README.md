@@ -78,6 +78,11 @@ Options:
    check_qw <QWIP> : Check status of quorum witness
                    loss_sync ->     Critical
                    error ->         Critical
+				   
+   check_health :  Check overall state of the system
+   
+   check_alerts : Check status of system alerts
+				   
 ```
 
 ## Usage in Nagios

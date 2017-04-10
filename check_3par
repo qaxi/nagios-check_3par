@@ -8,6 +8,7 @@
 # Last update 2015/09/17 qaxi@seznam.cz
 # Last update 2016/12/16 yves.vaccarezza@corsedusud.fr
 # Last update 2017/04/06 qaxi@seznam.cz https://github.com/qaxi/nagios-check_3par
+# Last update 2017/04/10 peterhanraets https://github.com/peterhanraets/nagios-check_3par
 #
 # This script is provided "as is" without warranty of any kind and 3PAR 
 # specifically disclaims all implied warranties of merchantability, 
@@ -114,6 +115,10 @@ Supported commands
    check_qw <QWIP> : Check status of quorum witness
                    loss_sync ->     Critical
                    error ->         Critical
+				   
+   check_health :  Check overall state of the system
+   
+   check_alerts : Check status of system alerts
 
 "
 exit 128
@@ -365,7 +370,7 @@ then
         echo Could not connect to 3PAR $INSERV
         exit 3
     fi
-    TMPOUT=$( echo "$TMPOUT" | grep -v -i iscsi 2>&1 | grep -v -i rcip 2>&1 )
+	TMPOUT=$( echo "$TMPOUT" | grep -v -i iscsi 2>&1 | grep -v -i rcip 2>&1 | grep -v -i free 2>&1)
 
     if [ $( echo "$TMPOUT" | grep -c -i error ) -gt 0 ]
     then
@@ -382,7 +387,6 @@ then
         fi
     fi
 fi
-
 
 if [ "$COMMAND" == "check_cap_ssd" ]
 then
@@ -582,6 +586,51 @@ then
         echo " $TMPOUT "
         exit 1
     fi
+fi
+
+if [ "$COMMAND" == "check_alerts" ]
+then
+	TMPOUT=$( $CONNECTCOMMAND showalert 2>&1 )
+	if [ $? -gt 0 ]
+	then
+		echo Could not connect to InServ $INSERV
+		exit 3
+	fi
+
+	if [ $( echo "$TMPOUT" |  grep -c -i fatal ) -gt 0 ] || [ $( echo "$TMPOUT" |  grep -c -i critical ) -gt 0 ] || [ $( echo "$TMPOUT" |  grep -c -i major ) -gt 0 ]
+	then
+		echo "CRITICAL! The system has fatal/critical/major level alerts. Please check immediately" 
+		exit 2
+	else
+		if [ $( echo "$TMPOUT" | grep -c -i minor ) -gt 0 ] || [ $( echo "$TMPOUT" |  grep -c -i degraded ) -gt 0 ]
+		then
+			echo "WARNING! The system has minor/degraded level alerts. Please check asap" 
+			exit 1
+		else
+			echo OK : No alarms
+			exit 0
+		fi
+	fi
+fi
+
+if [ "$COMMAND" == "check_health" ]
+then
+	TMPOUT=$( $CONNECTCOMMAND checkhealth -quiet 2>&1 )
+	if [ $? -gt 0 ]
+	then
+		echo Could not connect to InServ $INSERV
+		exit 3
+	fi
+
+	if [ $( echo "$TMPOUT" | grep total | awk '{print $1}'  ) -gt 0 ] 
+	then
+		echo "WARNING! The system is not healthy. Please check."
+		echo "$TMPOUT"
+		exit 1
+	else
+		echo OK : System is healthy
+		exit 0
+	fi
 fi
 
 usage "ERROR Wrong command '$COMMAND' ."
