@@ -577,7 +577,7 @@ then
         exit 3
     fi
 
-    if [ $( echo "$TMPOUT" | grep -c -i $CMDARG1 | grep Started | wc -l ) -gt 0 ]
+    if [ $( echo "$TMPOUT" | grep -i $CMDARG1 | grep Started | wc -l ) -gt 0 ]
     then
         echo "OK : Quorum Witness normal status"
         exit 0
