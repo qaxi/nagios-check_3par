@@ -93,6 +93,10 @@ Copy file `3par.cfg` to Nagios `conf.d` directory (for example `/etc/nagios/conf
 
 Read `3par.cfg` and adjust it to your needs and restart nagios `service nagios restart`
 
+## Testing
+
+You can test `check_3par` while developing. Copy `test.sh.templ` to `test.sh`, edit it to meet your needs and enjoy happy testing ... ;-)
+
 ## Links
 
 Nagios plugin developement [https://nagios-plugins.org/doc/guidelines.html#PLUGOPTIONS]
