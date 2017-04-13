@@ -36,7 +36,7 @@ function usage() {
     echo "${PRGNAME} ERROR: $*"
     echo ""
 }
-
+exit
 echo "${PRGNAME} v${VERSION} (https://github.com/qaxi/nagios-check_3par)
 Copyright (c) 2010-2017 various developers - look in source code
 
@@ -365,7 +365,7 @@ then
         echo Could not connect to 3PAR $INSERV
         exit 3
     fi
-    TMPOUT=$( echo "$TMPOUT" | grep -v -i iscsi 2>&1 | grep -v -i rcip 2>&1 )
+	TMPOUT=$( echo "$TMPOUT" | grep -v -i iscsi 2>&1 | grep -v -i rcip 2>&1 | grep -v -i free 2>&1)
 
     if [ $( echo "$TMPOUT" | grep -c -i error ) -gt 0 ]
     then
@@ -382,7 +382,6 @@ then
         fi
     fi
 fi
-
 
 if [ "$COMMAND" == "check_cap_ssd" ]
 then
@@ -512,11 +511,18 @@ then
         exit 3
     fi
 
-    TMPOUT=$( $CONNECTCOMMAND showvv -csvtable 2>&1 )
+    TMPOUT=$( $CONNECTCOMMAND showvv $CMDARG1 -csvtable 2>&1 )
     if [ $? -gt 0 ]
     then
         echo "Could not connect to 3PAR $INSERV"
         exit 3
+    fi
+
+    LASTLINE=$(echo "$TMPOUT" | tail -1 )
+    if [ "$LASTLINE" = "no vv listed" ]
+    then
+        echo No such volume: $CMDARG1
+        exit 0
     fi
 
     TMPOUT=$( echo "$TMPOUT" | grep ",base," | grep ",${CMDARG1}," )
@@ -573,7 +579,7 @@ then
         exit 3
     fi
 
-    if [ $( echo "$TMPOUT" | grep -c -i $CMDARG1 | grep Started | wc -l ) -gt 0 ]
+    if [ $( echo "$TMPOUT" | grep -i $CMDARG1 | grep Started | wc -l ) -gt 0 ]
     then
         echo "OK : Quorum Witness normal status"
         exit 0
@@ -582,6 +588,51 @@ then
         echo " $TMPOUT "
         exit 1
     fi
+fi
+
+if [ "$COMMAND" == "check_alerts" ]
+then
+	TMPOUT=$( $CONNECTCOMMAND showalert 2>&1 )
+	if [ $? -gt 0 ]
+	then
+		echo Could not connect to InServ $INSERV
+		exit 3
+	fi
+
+	if [ $( echo "$TMPOUT" |  grep -c -i fatal ) -gt 0 ] || [ $( echo "$TMPOUT" |  grep -c -i critical ) -gt 0 ] || [ $( echo "$TMPOUT" |  grep -c -i major ) -gt 0 ]
+	then
+		echo "CRITICAL! The system has fatal/critical/major level alerts. Please check immediately" 
+		exit 2
+	else
+		if [ $( echo "$TMPOUT" | grep -c -i minor ) -gt 0 ] || [ $( echo "$TMPOUT" |  grep -c -i degraded ) -gt 0 ]
+		then
+			echo "WARNING! The system has minor/degraded level alerts. Please check asap" 
+			exit 1
+		else
+			echo OK : No alarms
+			exit 0
+		fi
+	fi
+fi
+
+if [ "$COMMAND" == "check_health" ]
+then
+	TMPOUT=$( $CONNECTCOMMAND checkhealth -quiet 2>&1 )
+	if [ $? -gt 0 ]
+	then
+		echo Could not connect to InServ $INSERV
+		exit 3
+	fi
+
+	if [ $( echo "$TMPOUT" | grep total | awk '{print $1}'  ) -gt 0 ] 
+	then
+		echo "WARNING! The system is not healthy. Please check."
+		echo "$TMPOUT"
+		exit 1
+	else
+		echo OK : System is healthy
+		exit 0
+	fi
 fi
 
 usage "ERROR Wrong command '$COMMAND' ."
