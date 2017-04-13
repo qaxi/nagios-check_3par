@@ -589,10 +589,11 @@ then
     TMPOUT=$( $CONNECTCOMMAND setrcopytarget witness check $CMDARG1 2>&1 )
     if [ $( echo "$TMPOUT" | grep -c "Connectivity check passed" ) -eq 0 ]
     then
-        output "UNKN" "Could not connect to 3PAR $INSERV"
+        output "UNKN" "$TMPOUT"
     fi
 
-    if [ $( echo "$TMPOUT" | grep -i $CMDARG1 | grep Started | wc -l ) -gt 0 ]
+    TMPOUT=$( $CONNECTCOMMAND showrcopy -qw targets 2>&1 )
+    if [ $( echo "$TMPOUT" | grep -i " $CMDARG1 " | grep -c Started ) -gt 0 ]
     then
         output "OK" "Quorum Witness normal status"
     else
