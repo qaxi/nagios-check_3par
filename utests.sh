@@ -146,6 +146,10 @@ utest check_ps_cage
 utest check_volume $VOL
 utest -w 1 -c 2 check_volume $VOL
 utest -w 98 -c 99 check_volume $VOL
+
+# check real QW
 utest check_qw $QW
+# check nonexitsting QW
+utest check_qw 8.8.8.8
 
 # vim: tabstop=4 softtabstop=4 shiftwidth=4 expandtab:
