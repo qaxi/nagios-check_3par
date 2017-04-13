@@ -168,16 +168,30 @@ dbg OPTION: $OPTION OPTIND: $OPTIND OPTARG: $OPTARG
 # 2 Critical The plugin detected that either the service was not running or it was above some "critical" threshold
 # 3 Unknown Invalid command line arguments were supplied to the plugin or low-level failures 
 
-RETOK=0
-RETWARN=1
-RETCRIT=2
-RETUNKN=3
-
 # -v
 # 0 Single line, minimal output. Summary
 # 1 Single line, additional information (eg list processes that fail)
 # 2 Multi line, configuration debug output (eg ps command used)
 # 3 Lots of detail for plugin problem diagnosis
+
+# Output Nagios compatible string and exit
+function output () {
+    STATUS=$1
+    shift
+    OUTPUT="$@"
+
+    case "$STATUS" in
+        OK              ) RET=0 ; OUT="OK: $OUTPUT" ;;
+        WARN | WARNING  ) RET=1 ; OUT="Warning: $OUTPUT" ;;
+        CRIT | CRITICAL ) RET=2 ; OUT="Critical: $OUTPUT" ;;
+        UNKN | UNKNOWN  ) RET=3 ; OUT="Unknown: $OUTPUT" ;;
+        *   ) RET=3 ; OUT="Unknown: bad parameter STATUS for output()" ;;
+    esac
+
+    echo "$OUT"
+    exit $RET
+}
+
 
 COMMAND="$1"
 CMDARG1="$2"
@@ -568,25 +582,21 @@ if [ "$COMMAND" == "check_qw" ]
 then
     if [ "$CMDARG1" == "" ]
     then
-        echo "Command 'check_qw' needs QW IP as additional parameter."
-        exit 3
+        output "UNKN" "Command 'check_qw' needs QW IP as additional parameter."
     fi
 
     TMPOUT=$( $CONNECTCOMMAND showrcopy -qw targets 2>&1 )
     if [ $? -gt 0 ]
     then
-        echo "Could not connect to 3PAR $INSERV"
-        exit 3
+        output "UNKN" "Could not connect to 3PAR $INSERV"
     fi
 
     if [ $( echo "$TMPOUT" | grep -i $CMDARG1 | grep Started | wc -l ) -gt 0 ]
     then
-        echo "OK : Quorum Witness normal status"
-        exit 0
+        output "OK" "Quorum Witness normal status"
     else
-        echo "WARNING! Quorum Witness has problems"
-        echo " $TMPOUT "
-        exit 1
+        output "WARN" $( echo "Quorum Witness has problems" ; \
+                         echo " $TMPOUT " ; )
     fi
 fi
 

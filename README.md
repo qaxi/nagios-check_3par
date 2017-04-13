@@ -93,4 +93,6 @@ Copy file `3par.cfg` to Nagios `conf.d` directory (for example `/etc/nagios/conf
 
 Read `3par.cfg` and adjust it to your needs and restart nagios `service nagios restart`
 
+## Links
 
+Nagios plugin developement [https://nagios-plugins.org/doc/guidelines.html#PLUGOPTIONS]
