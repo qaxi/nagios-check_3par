@@ -113,9 +113,9 @@ else
 fi
 
 function utest() {
-    ESTRET=$1
+    EXPRET=$1
     shift
-    case "$ESTRET" in 
+    case "$EXPRET" in 
         OK   ) RET=0 ;; 
         WARN ) RET=1 ;; 
         CRIT ) RET=2 ;; 
@@ -129,15 +129,17 @@ function utest() {
    
     if [ $CMDRET -eq $RET ]
     then
-        echo "### OK ### \$CMD $@"
-        echo "$CMDOUT"
+        echo "### OK # \$CMD $@"
     else
+        echo 
         echo "############################################"
         echo "# Failed \$CMD $@"
-        echo "  Expected return '$EXPRET' but get '$CMDRET'."
+        echo "# Expected return '$RET' but get '$CMDRET'."
+        echo "##########"
         echo "$CMDOUT"
+        echo "############################################"
+        echo 
     fi
-    echo
 }
 
 echo "####################################"
@@ -191,5 +193,9 @@ utest OK -w 98 -c 99 check_volume $VOL
 utest OK check_qw $QW
 # check nonexitsting QW
 utest UNKN check_qw 8.8.8.8
+
+utest OK check_alerts
+utest OK check_health
+
 
 # vim: tabstop=4 softtabstop=4 shiftwidth=4 expandtab:
