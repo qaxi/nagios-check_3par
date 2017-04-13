@@ -132,18 +132,38 @@ utest check_node
 utest check_pd 
 utest check_ld
 utest check_vv
-utest check_cap_ssd
-utest -w 1 -c 2 check_cap_ssd
-utest -w 98 -c 99 check_cap_ssd
-utest check_cap_fc
-utest -w 1 -c 2 check_cap_fc
-utest -w 98 -c 99 check_cap_fc
-utest check_cap_nl
-utest -w 1 -c 2 check_cap_nl
-utest -w 98 -c 99 check_cap_nl
 utest check_ps_node
 utest check_ps_cage
+
+utest check_cap_ssd
+# check Warning level
+utest -w 1 -c 99 check_cap_ssd
+utest -w 98 -c 99 check_cap_ssd
+# check Critical level
+utest -w 1 -c 2 check_cap_ssd
+utest -w 98 -c 99 check_cap_ssd
+
+utest check_cap_fc
+# check Warning level
+utest -w 1 -c 99 check_cap_fc
+utest -w 98 -c 99 check_cap_fc
+# check Critical level
+utest -w 1 -c 2 check_cap_fc
+utest -w 98 -c 99 check_cap_fc
+
+utest check_cap_nl
+# check Warning level
+utest -w 1 -c 99 check_cap_nl
+utest -w 98 -c 99 check_cap_nl
+# check Critical level
+utest -w 1 -c 2 check_cap_nl
+utest -w 98 -c 99 check_cap_nl
+
 utest check_volume $VOL
+# check Warning level
+utest -w 1 -c 99 check_volume $VOL
+utest -w 98 -c 99 check_volume $VOL
+# check Critical level
 utest -w 1 -c 2 check_volume $VOL
 utest -w 98 -c 99 check_volume $VOL
 
