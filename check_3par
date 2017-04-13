@@ -34,12 +34,16 @@ function dbg() { [ "$DBG" = "y" ] && echo "DBG: $*" >&2 ; }
 
 OPTS=':hH:i:u:p:w:c:d-:'   # first : and lsast - is mandatory
 function usage() {
-[ -n "$*" ] && {
-    exec 1>&2   # redirect STDOUT to STDERR for rest of script
-    echo "${PRGNAME} ERROR: $*"
-    echo ""
+    [ -n "$*" ] && {
+        echo "${PRGNAME} ERROR: $*"
+        echo ""
+    }
+
+    help
+    exit 3
 }
-exit
+
+function help() {
 echo "${PRGNAME} v${VERSION} (https://github.com/qaxi/nagios-check_3par)
 Copyright (c) 2010-2017 various developers - look in source code
 
@@ -64,8 +68,15 @@ Options:
                 Critical treshold
     -d, --debug
                 Turn on debugging
+    
+    COMMAND     use --help to get details
 
-Supported commands
+"
+}
+
+function helplong () {
+help
+echo "Supported commands
 
    check_pd :   Check status of physical disks
                    Degraded ->      Warning
@@ -117,10 +128,13 @@ Supported commands
    check_qw <QWIP> : Check status of quorum witness
                    loss_sync ->     Critical
                    error ->         Critical
+   
+   check_health :  Check overall state of the system
+      
+   check_alerts : Check status of system alerts
 
 "
-exit 128
-
+exit 3
 }
 
 [ "$#" = 0 ] &&  usage "Too few arguments."
@@ -129,7 +143,7 @@ while getopts "$OPTS" OPTION ; do
     dbg "option $OPTION optind $OPTIND optarg $OPTARG"
     case "$OPTION" in
         d  ) DBG="y";;
-        h  ) usage ;;   
+        h  ) helplong ;;   
         H  ) INSERV="$OPTARG" ;;
         i  ) INFORMBIN="$OPTARG" ;;
         u  ) USERNAME="$OPTARG" ;;
@@ -143,7 +157,7 @@ while getopts "$OPTS" OPTION ; do
             dbg "- option $OPTION optind $OPTIND optarg $OPTARG"
             case $OPTION in
                 --debug )           DBG="y" ;;
-                --help )            usage ;;
+                --help )            helplong ;;
                 --hostname )        INSERV="$OPTARG" ;;
                 --inform-bin )      INFORMBIN="$OPTARG" ;;
                 --username )        USERNAME="$OPTARG" ;;
