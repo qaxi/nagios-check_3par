@@ -78,6 +78,11 @@ Options:
    check_qw <QWIP> : Check status of quorum witness
                    loss_sync ->     Critical
                    error ->         Critical
+				   
+   check_health :  Check overall state of the system
+   
+   check_alerts : Check status of system alerts
+				   
 ```
 
 ## Usage in Nagios
@@ -88,4 +93,6 @@ Copy file `3par.cfg` to Nagios `conf.d` directory (for example `/etc/nagios/conf
 
 Read `3par.cfg` and adjust it to your needs and restart nagios `service nagios restart`
 
+## Links
 
+Nagios plugin developement [https://nagios-plugins.org/doc/guidelines.html#PLUGOPTIONS]
