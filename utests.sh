@@ -113,10 +113,30 @@ else
 fi
 
 function utest() {
-    
-    echo "####################################"
-    echo "# Test: \$CMD $@"
-    $CMD $@
+    ESTRET=$1
+    shift
+    case "$ESTRET" in 
+        OK   ) RET=0 ;; 
+        WARN ) RET=1 ;; 
+        CRIT ) RET=2 ;; 
+        UNKN ) RET=3 ;; 
+	*   ) echo "Wrong parameter for utest()" >&2; exit 128 ;; 
+    esac
+
+
+    CMDOUT=$( $CMD $@ )
+    CMDRET=$?
+   
+    if [ $CMDRET -eq $RET ]
+    then
+        echo "### OK ### \$CMD $@"
+        echo "$CMDOUT"
+    else
+        echo "############################################"
+        echo "# Failed \$CMD $@"
+        echo "  Expected return '$EXPRET' but get '$CMDRET'."
+        echo "$CMDOUT"
+    fi
     echo
 }
 
@@ -128,48 +148,48 @@ echo " !!! Warning !!!"
 echo " If tested 3PAR array is in an edgy condition,"
 echo " you can get false negatives/positives"
 echo 
-utest check_node
-utest check_pd 
-utest check_ld
-utest check_vv
-utest check_ps_node
-utest check_ps_cage
+utest OK check_node
+utest OK check_pd 
+utest OK check_ld
+utest OK check_vv
+utest OK check_ps_node
+utest OK check_ps_cage
 
-utest check_cap_ssd
+utest OK check_cap_ssd
 # check Warning level
-utest -w 1 -c 99 check_cap_ssd
-utest -w 98 -c 99 check_cap_ssd
+utest WARN -w 1 -c 99 check_cap_ssd
+utest OK -w 98 -c 99 check_cap_ssd
 # check Critical level
-utest -w 1 -c 2 check_cap_ssd
-utest -w 98 -c 99 check_cap_ssd
+utest CRIT -w 1 -c 2 check_cap_ssd
+utest OK -w 98 -c 99 check_cap_ssd
 
-utest check_cap_fc
+utest OK check_cap_fc
 # check Warning level
-utest -w 1 -c 99 check_cap_fc
-utest -w 98 -c 99 check_cap_fc
+utest WARN -w 1 -c 99 check_cap_fc
+utest OK -w 98 -c 99 check_cap_fc
 # check Critical level
-utest -w 1 -c 2 check_cap_fc
-utest -w 98 -c 99 check_cap_fc
+utest CRIT -w 1 -c 2 check_cap_fc
+utest OK -w 98 -c 99 check_cap_fc
 
-utest check_cap_nl
+utest OK check_cap_nl
 # check Warning level
-utest -w 1 -c 99 check_cap_nl
-utest -w 98 -c 99 check_cap_nl
+utest WARN -w 1 -c 99 check_cap_nl
+utest OK -w 98 -c 99 check_cap_nl
 # check Critical level
-utest -w 1 -c 2 check_cap_nl
-utest -w 98 -c 99 check_cap_nl
+utest CRIT -w 1 -c 2 check_cap_nl
+utest OK -w 98 -c 99 check_cap_nl
 
-utest check_volume $VOL
+utest OK check_volume $VOL
 # check Warning level
-utest -w 1 -c 99 check_volume $VOL
-utest -w 98 -c 99 check_volume $VOL
+utest WARN -w 1 -c 99 check_volume $VOL
+utest OK -w 98 -c 99 check_volume $VOL
 # check Critical level
-utest -w 1 -c 2 check_volume $VOL
-utest -w 98 -c 99 check_volume $VOL
+utest CRIT -w 1 -c 2 check_volume $VOL
+utest OK -w 98 -c 99 check_volume $VOL
 
 # check real QW
-utest check_qw $QW
+utest OK check_qw $QW
 # check nonexitsting QW
-utest check_qw 8.8.8.8
+utest UNKN check_qw 8.8.8.8
 
 # vim: tabstop=4 softtabstop=4 shiftwidth=4 expandtab:
