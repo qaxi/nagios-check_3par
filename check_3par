@@ -203,6 +203,7 @@ else
     CONNECTCOMMAND="ssh $USERNAME@$INSERV"
 fi
 
+
 if [ "$COMMAND" == "check_pd" ]
 then
     TMPOUT=$( $CONNECTCOMMAND showpd -showcols Id,State -nohdtot 2>&1 )
@@ -562,30 +563,32 @@ if [ "$COMMAND" == "check_qw" ]
 then
     if [ "$CMDARG1" == "" ]
     then
-        echo "Command 'check_qw' needs QW IP as additional parameter."
-        exit 3
+        echo "Unknown: Command 'check_qw' needs QW IP as additional parameter."
+        exit $RETUNKN
+    fi
+
+    TMPOUT=$( $CONNECTCOMMAND setrcopytarget witness check $CMDARG1 2>&1 )
+    if [ $( echo "$TMPOUT" | grep -c "Connectivity check passed" ) -eq 0 ]
+    then
+        echo "Critical: connectivity to quorum witeness failed"
+        echo " $TMPOUT "
+        exit $RETCRIT
     fi
 
     TMPOUT=$( $CONNECTCOMMAND showrcopy -qw targets 2>&1 )
-    if [ $? -gt 0 ]
+    if [ $( echo "$TMPOUT" | grep -i $CMDARG1 | grep Started | wc -l ) -gt 0 ]
     then
-        echo "Could not connect to 3PAR $INSERV"
-        exit 3
-    fi
-
-    if [ $( echo "$TMPOUT" | grep -c -i $CMDARG1 | grep Started | wc -l ) -gt 0 ]
-    then
-        echo "OK : Quorum Witness normal status"
-        exit 0
+        echo "OK: Quorum Witness normal status"
+        exit $RETOK
     else
-        echo "WARNING! Quorum Witness has problems"
+        echo "Critical: Quorum Witness has problems"
         echo " $TMPOUT "
-        exit 1
+        exit $RETCRIT
     fi
 fi
 
 usage "ERROR Wrong command '$COMMAND' ."
-exit 128
+exit $RETUNKN
 
 
 # vim: tabstop=4 softtabstop=4 shiftwidth=4 expandtab:
