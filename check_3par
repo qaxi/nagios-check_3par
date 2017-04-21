@@ -26,13 +26,13 @@
 VERSION="1.1"
 CAPWARN=80  # warning at 80% of used disc capacity
 CAPCRIT=90  # warnint at 90% of user disc capacity
+VERBOSE=0
+DBG="n"
 
 PRGNAME=$(basename "$0")
 
-DBG="n"
 function dbg() { [ "$DBG" = "y" ] && echo "DBG: $*" >&2 ; }
 
-OPTS=':hH:i:u:p:w:c:d-:'   # first : and lsast - is mandatory
 function usage() {
     [ -n "$*" ] && {
         echo "${PRGNAME} ERROR: $*"
@@ -43,6 +43,7 @@ function usage() {
     exit 3
 }
 
+OPTS=':hH:i:u:p:w:c:dv-:'   # first : and lsast - is mandatory
 function help() {
 echo "${PRGNAME} v${VERSION} (https://github.com/qaxi/nagios-check_3par)
 Copyright (c) 2010-2017 various developers - look in source code
@@ -68,6 +69,8 @@ Options:
                 Critical treshold
     -d, --debug
                 Turn on debugging
+    -v, --verbose
+                increment verbosity if supported (multiple use allowed)
     
     COMMAND     use --help to get details
 
@@ -150,6 +153,7 @@ while getopts "$OPTS" OPTION ; do
         p  ) PASSFILE="$OPTARG" ;;
         w  ) CAPWARN="$OPTARG" ;;
         c  ) CAPCRIT="$OPTARG" ;;
+        v  ) ((VERBOSE++)) ;;
         -  ) [ $OPTIND -ge 1 ] && optind=$(expr $OPTIND - 1 ) || optind=$OPTIND
             eval OPTION="\$$optind"
             OPTARG=$(echo $OPTION | cut -d'=' -f2)
@@ -164,6 +168,7 @@ while getopts "$OPTS" OPTION ; do
                 --password-file )   USERNAME="$OPTARG" ;;
                 --warning )         CAPWARN="$OPTARG" ;;
                 --critical )        CAPCRIT="$OPTARG" ;;
+                --verbose )         ((VERBOSE++)) ;;
                 ?  )  usage "Invalid option '$OPTARG'" ;;
                 *  )  usage "parsing options failed";;
             esac
@@ -179,6 +184,7 @@ shift $((OPTIND-1))
 
 dbg "3PAR command: $*"
 dbg OPTION: $OPTION OPTIND: $OPTIND OPTARG: $OPTARG
+dbg verbosity: $VERBOSE
 
 # 0 OK The plugin was able to check the service and it appeared to be functioning properly
 # 1 Warning The plugin was able to check the service, but it appeared to be above some "warning" threshold or did not appear to be working properly
