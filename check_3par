@@ -26,13 +26,13 @@
 VERSION="1.1"
 CAPWARN=80  # warning at 80% of used disc capacity
 CAPCRIT=90  # warnint at 90% of user disc capacity
+VERBOSE=0
+DBG="n"
 
 PRGNAME=$(basename "$0")
 
-DBG="n"
 function dbg() { [ "$DBG" = "y" ] && echo "DBG: $*" >&2 ; }
 
-OPTS=':hH:i:u:p:w:c:d-:'   # first : and lsast - is mandatory
 function usage() {
     [ -n "$*" ] && {
         echo "${PRGNAME} ERROR: $*"
@@ -43,6 +43,7 @@ function usage() {
     exit 3
 }
 
+OPTS=':hH:i:u:p:w:c:dv-:'   # first : and lsast - is mandatory
 function help() {
 echo "${PRGNAME} v${VERSION} (https://github.com/qaxi/nagios-check_3par)
 Copyright (c) 2010-2017 various developers - look in source code
@@ -68,6 +69,8 @@ Options:
                 Critical treshold
     -d, --debug
                 Turn on debugging
+    -v, --verbose
+                increment verbosity if supported (multiple use allowed)
     
     COMMAND     use --help to get details
 
@@ -150,6 +153,7 @@ while getopts "$OPTS" OPTION ; do
         p  ) PASSFILE="$OPTARG" ;;
         w  ) CAPWARN="$OPTARG" ;;
         c  ) CAPCRIT="$OPTARG" ;;
+        v  ) ((VERBOSE++)) ;;
         -  ) [ $OPTIND -ge 1 ] && optind=$(expr $OPTIND - 1 ) || optind=$OPTIND
             eval OPTION="\$$optind"
             OPTARG=$(echo $OPTION | cut -d'=' -f2)
@@ -164,6 +168,7 @@ while getopts "$OPTS" OPTION ; do
                 --password-file )   USERNAME="$OPTARG" ;;
                 --warning )         CAPWARN="$OPTARG" ;;
                 --critical )        CAPCRIT="$OPTARG" ;;
+                --verbose )         ((VERBOSE++)) ;;
                 ?  )  usage "Invalid option '$OPTARG'" ;;
                 *  )  usage "parsing options failed";;
             esac
@@ -179,6 +184,7 @@ shift $((OPTIND-1))
 
 dbg "3PAR command: $*"
 dbg OPTION: $OPTION OPTIND: $OPTIND OPTARG: $OPTARG
+dbg verbosity: $VERBOSE
 
 # 0 OK The plugin was able to check the service and it appeared to be functioning properly
 # 1 Warning The plugin was able to check the service, but it appeared to be above some "warning" threshold or did not appear to be working properly
@@ -205,7 +211,7 @@ function output () {
         *   ) RET=3 ; OUT="Unknown: bad parameter STATUS for output()" ;;
     esac
 
-    echo "$OUT"
+    echo -e "$OUT"
     exit $RET
 }
 
@@ -340,25 +346,64 @@ fi
 
 if [ "$COMMAND" == "check_vv" ]
 then
-    TMPOUT=$( $CONNECTCOMMAND showvv -showcols Name,State -notree -nohdtot 2>&1 )
+    TMPOUT=$( $CONNECTCOMMAND showvv -notree -nohdtot 2>&1 )
     if [ $? -gt 0 ]
     then
-        echo Could not connect to 3PAR $INSERV
-        exit 3
+        output UNKNOWN Could not get data from 3PAR $INSERV "\n$TMPOUT"
     fi
+    
+    #Filter VVs
+    TMPOUT=$( echo "$TMPOUT" | sed "s/^  *//;s/  */ /g; /vv base/ p;d" )
 
     if [ $( echo "$TMPOUT" | grep -c -i failed ) -gt 0 ]
     then
-        echo CRITICAL! There are failed VVs. Contact 3PAR support
-        exit 2
+        case $VERBOSE in
+                0) output CRITICAL There are failed VVs \
+                    "$( echo "$TMPOUT" | grep -c -i failed )" Contact 3PAR support ;;
+
+                1) output CRITICAL There are failed VVs \
+                    "$( echo "$TMPOUT" | grep -i failed | tr -d '\n')" ;;
+
+                2)  OKVOLUMES=$(echo "$TMPOUT" | grep -i failed \
+                    | cut -f 2,7,8,11,12 -d " " | sort -n \
+                    | sed "s/\(.*\) \(.*\) \(.*\) \(.*\) \(.*\)/\1 \2 \3 size \5MB used \4MB /")
+                    output CRITICAL There are failed VVs "\n$OKVOLUMES" ;;
+                    
+                *)  OKVOLUMES=$(echo "$TMPOUT" | grep -i failed | sort -n )
+                    output CRITICAL There are failed VVs "\n$OKVOLUMES" ;;
+        esac
     else
         if [ $( echo "$TMPOUT" | grep -c -i degraded ) -gt 0 ]
         then
-            echo WARNING! There are degraded VVs. Contact 3PAR support
-            exit 1
+            case $VERBOSE in
+                0) output WARNING There are degraded VVs \
+                    "$( echo "$TMPOUT" | grep -c -i degraded )" Contact 3PAR support ;;
+
+                1) output WARNING There are degraded VVs \
+                    "$( echo "$TMPOUT" | grep -i degraded | tr -d '\n')" ;;
+
+                2)  OKVOLUMES=$(echo "$TMPOUT" | grep -i degraded \
+                    | cut -f 2,7,8,11,12 -d " " | sort -n \
+                    | sed "s/\(.*\) \(.*\) \(.*\) \(.*\) \(.*\)/\1 \2 \3 size \5MB used \4MB /")
+                    output WARNING There are degraded VVs "\n$OKVOLUMES" ;;
+                    
+                *)  OKVOLUMES=$(echo "$TMPOUT" | grep -i degraded | sort -n )
+                    output WARNING There are degraded VVs "\n$OKVOLUMES" ;;
+            esac
         else
-            echo OK : All VVs are normal
-            exit 0
+            case $VERBOSE in
+                0)  output OK All $(echo "$TMPOUT" | wc -l ) VVs are normal ;;
+                
+                1)  OKVOLUMES=$(echo "$TMPOUT" | cut -f 2 -d " " | sort -n ) 
+                    output OK All $(echo "$TMPOUT" | wc -l ) VVs are normal $OKVOLUMES ;;
+
+                2)  OKVOLUMES=$(echo "$TMPOUT" | cut -f 2,7,11,12 -d " " | sort -n \
+                        | sed "s/\(.*\) \(.*\) \(.*\) \(.*\)/\1 \2 size \4MB used \3MB /")
+                    output OK All $(echo "$TMPOUT" | wc -l ) VVs are normal "\n$OKVOLUMES" ;;
+
+                *)  OKVOLUMES=$(echo "$TMPOUT" | sort -n )
+                    output OK All $(echo "$TMPOUT" | wc -l ) VVs are normal "\n$OKVOLUMES" ;;
+            esac
         fi
     fi
 fi
