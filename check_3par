@@ -10,6 +10,7 @@
 # Last update 2017/04/06 qaxi@seznam.cz https://github.com/qaxi/nagios-check_3par
 # Last update 2017/04/12 peterhanraets https://github.com/peterhanraets/nagios-check_3par
 # Last update 2017/04/13 qaxi@seznam.cz https://github.com/qaxi/nagios-check_3par
+# Last update 2017/10/09 gg@grexaut.net https://github.com/GrexAut
 # 
 #
 # This script is provided "as is" without warranty of any kind and 3PAR 
@@ -23,7 +24,7 @@
 # to this script
 #
 
-VERSION="1.1"
+VERSION="1.2"
 CAPWARN=80  # warning at 80% of used disc capacity
 CAPCRIT=90  # warnint at 90% of user disc capacity
 
@@ -45,7 +46,7 @@ Copyright (c) 2010-2017 various developers - look in source code
 
 This plugin contains tests 3PAR disc array statuses.
 
-Usage: ${PRGNAME} -h | -H <3PAR> [-d] [-u <username>] [-k <PRIVATE_KEY_FILE> [-i <inform_cli> [-p <password_file>]] [-w <warning>] [-c <critical>] COMMAND [ arg [arg ...]]
+Usage: ${PRGNAME} -h | -H <3PAR> [-d] (-u <username> [-k <PRIVATE_KEY_FILE>] | -i <inform_cli> [-p <password_file>]) [-w <warning>] [-c <critical>] COMMAND [ arg [arg ...]]
 
 Options:
     -h, --help 
@@ -222,9 +223,17 @@ then
 else
     # To connect using SSH use -u option to set username
     # Note : connecting using SSH requires setting public key authentication
-    CONNECTCOMMAND="ssh $USERNAME@$INSERV -i $KEYFILE"
+    if [ -n "$USERNAME" ]
+    then
+    	usage "Use either -u <username> or -i <inform_bin>
+    else
+    	if [ -n "$KEYFILE" ]
+	then
+	    CONNECTCOMMAND="ssh $USERNAME@$INSERV -i $KEYFILE"
+	else
+	    CONNECTCOMMAND="ssh $USERNAME@$INSERV -i $KEYFILE"
+	fi
 fi
-
 
 if [ "$COMMAND" == "check_pd" ]
 then
