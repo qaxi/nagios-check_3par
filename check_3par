@@ -40,7 +40,7 @@ function usage() {
     echo "${PRGNAME} ERROR: $*"
     echo ""
 }
-exit
+
 echo "${PRGNAME} v${VERSION} (https://github.com/qaxi/nagios-check_3par)
 Copyright (c) 2010-2017 various developers - look in source code
 
