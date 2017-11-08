@@ -18,3 +18,6 @@ plugin should print the diagnostic and just the usage part of the help message. 
 2 Critical The plugin detected that either the service was not running or it was above some "critical" threshold
 
 3 Unknown Invalid command line arguments were supplied to the plugin or low-level failures internal to the plugin (such as unable to fork, or open a tcp socket) that prevent it from performing the specified operation. Higher-level errors (such as name resolution errors, socket timeouts, etc) are outside of the control of plugins and should generally NOT be reported as UNKNOWN states.
+
+## Add support for snapshots
+showvv -notree -nohdtot | grep vcopy

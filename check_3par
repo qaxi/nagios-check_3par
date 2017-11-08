@@ -10,6 +10,7 @@
 # Last update 2017/04/06 qaxi@seznam.cz https://github.com/qaxi/nagios-check_3par
 # Last update 2017/04/12 peterhanraets https://github.com/peterhanraets/nagios-check_3par
 # Last update 2017/04/13 qaxi@seznam.cz https://github.com/qaxi/nagios-check_3par
+# Last update 2017/10/09 gg@grexaut.net https://github.com/GrexAut
 # 
 #
 # This script is provided "as is" without warranty of any kind and 3PAR 
@@ -23,7 +24,7 @@
 # to this script
 #
 
-VERSION="1.1"
+VERSION="1.2"
 CAPWARN=80  # warning at 80% of used disc capacity
 CAPCRIT=90  # warnint at 90% of user disc capacity
 VERBOSE=0
@@ -33,6 +34,7 @@ PRGNAME=$(basename "$0")
 
 function dbg() { [ "$DBG" = "y" ] && echo "DBG: $*" >&2 ; }
 
+OPTS=':hH:i:u:k:p:w:c:d-:'   # first : and lsast - is mandatory
 function usage() {
     [ -n "$*" ] && {
         echo "${PRGNAME} ERROR: $*"
@@ -43,14 +45,13 @@ function usage() {
     exit 3
 }
 
-OPTS=':hH:i:u:p:w:c:dv-:'   # first : and lsast - is mandatory
 function help() {
 echo "${PRGNAME} v${VERSION} (https://github.com/qaxi/nagios-check_3par)
 Copyright (c) 2010-2017 various developers - look in source code
 
 This plugin contains tests 3PAR disc array statuses.
 
-Usage: ${PRGNAME} -h | -H <3PAR> [-d] [-u <username>] [-i <inform_cli> [-p <password_file>]] [-w <warning>] [-c <critical>] COMMAND [ arg [arg ...]]
+Usage: ${PRGNAME} -h | -H <3PAR> [-d] (-u <username> [-k <PRIVATE_KEY_FILE>] | -i <inform_cli> [-p <password_file>]) [-w <warning>] [-c <critical>] COMMAND [ arg [arg ...]]
 
 Options:
     -h, --help 
@@ -61,6 +62,9 @@ Options:
                 Path to 3PAR Inform CLI. Default connection method is SSH.
     -u, --username=USER
                 3PAR username
+    -k, --ssh-key=PRIVATE_KEY_FILE
+                For ssh login, use this file as a key, instead of default identity
+                file (usually $HOME/.ssh/identity)
     -p, --password-file=PATH
                 Password file for 3PAR Inform CLI
     -w, --warning=TRESHOLD (default: 80)
@@ -150,6 +154,7 @@ while getopts "$OPTS" OPTION ; do
         H  ) INSERV="$OPTARG" ;;
         i  ) INFORMBIN="$OPTARG" ;;
         u  ) USERNAME="$OPTARG" ;;
+        k  ) KEYFILE="$OPTARG" ;;
         p  ) PASSFILE="$OPTARG" ;;
         w  ) CAPWARN="$OPTARG" ;;
         c  ) CAPCRIT="$OPTARG" ;;
@@ -165,6 +170,7 @@ while getopts "$OPTS" OPTION ; do
                 --hostname )        INSERV="$OPTARG" ;;
                 --inform-bin )      INFORMBIN="$OPTARG" ;;
                 --username )        USERNAME="$OPTARG" ;;
+                --ssh-key )         KEYFILE="$OPTARG" ;;
                 --password-file )   USERNAME="$OPTARG" ;;
                 --warning )         CAPWARN="$OPTARG" ;;
                 --critical )        CAPCRIT="$OPTARG" ;;
@@ -237,9 +243,17 @@ then
 else
     # To connect using SSH use -u option to set username
     # Note : connecting using SSH requires setting public key authentication
-    CONNECTCOMMAND="ssh $USERNAME@$INSERV"
+    if [ -n "$USERNAME" ]
+    then
+    	usage "Use either -u <username> or -i <inform_bin>
+    else
+    	if [ -n "$KEYFILE" ]
+	then
+	    CONNECTCOMMAND="ssh $USERNAME@$INSERV -i $KEYFILE"
+	else
+	    CONNECTCOMMAND="ssh $USERNAME@$INSERV "
+	fi
 fi
-
 
 if [ "$COMMAND" == "check_pd" ]
 then
