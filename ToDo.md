@@ -7,9 +7,6 @@
  2 Multi line, configuration debug output (eg ps command used) 
  3 Lots of detail for plugin problem diagnosis
 
-## adjust output for diagnosis 
-plugin should print the diagnostic and just the usage part of the help message. A well written plugin would then have --help as a way to get the verbose help.
-
 ## repair output and return values
 0 OK The plugin was able to check the service and it appeared to be functioning properly
 
