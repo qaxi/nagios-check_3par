@@ -2,13 +2,14 @@
 
 CAPWARN=80  # warning at 80% of used disc capacity
 CAPCRIT=90  # warnint at 90% of user disc capacity
+VERBOSE=0   # verbose
 
 PRGNAME=$(basename "$0")
 
 DBG="n"
 function dbg() { [ "$DBG" = "y" ] && echo "DBG: $*" >&2 ; }
 
-OPTS=':hH:i:u:p:w:c:d-:'   # first : and lsast - is mandatory
+OPTS=':hH:i:u:p:w:c:vd-:'   # first : and lsast - is mandatory
 function usage() {
 [ -n "$*" ] && {
     exec 1>&2   # redirect STDOUT to STDERR for rest of script
@@ -19,7 +20,7 @@ function usage() {
 echo "Tests for check_3par.
 Copyright (c) 2010-2017 various developers - look in source code
 
-Usage: ${PRGNAME} -h | -H <3PAR> [-d] [-u <username>] [-i <inform_cli> [-p <password_file>]] [-w <warning>] [-c <critical>] <volumename> <quorum_witeness>
+Usage: ${PRGNAME} -h | -H <3PAR> [-d] [-v] [-u <username>] [-i <inform_cli> [-p <password_file>]] [-w <warning>] [-c <critical>] <volumename> <quorum_witeness>
 
 Options:
     -h, --help 
@@ -38,7 +39,8 @@ Options:
                 Critical treshold
     -d, --debug
                 Turn on debugging
-
+    -v, --verbose
+                Verbose output
 "
 exit 128
 
@@ -50,6 +52,7 @@ while getopts "$OPTS" OPTION ; do
     dbg "option $OPTION optind $OPTIND optarg $OPTARG"
     case "$OPTION" in
         d  ) DBG="y";;
+        v  ) VERBOSE=$((++VERBOSE)) ;;
         h  ) usage ;;   
         H  ) INSERV="$OPTARG" ;;
         i  ) INFORMBIN="$OPTARG" ;;
@@ -64,6 +67,7 @@ while getopts "$OPTS" OPTION ; do
             dbg "- option $OPTION optind $OPTIND optarg $OPTARG"
             case $OPTION in
                 --debug )           DBG="y" ;;
+                --verbose )         VERBOSE=$((++VERBOSE)) ;;
                 --help )            usage ;;
                 --hostname )        INSERV="$OPTARG" ;;
                 --inform-bin )      INFORMBIN="$OPTARG" ;;
@@ -129,7 +133,11 @@ function utest() {
    
     if [ $CMDRET -eq $RET ]
     then
-        echo "### OK # \$CMD $@"
+        echo "### OK # $CMD $@"
+        if [ "${VERBOSE}" -gt 0 ]
+        then
+            echo "${CMDOUT}"
+        fi
     else
         echo 
         echo "############################################"
