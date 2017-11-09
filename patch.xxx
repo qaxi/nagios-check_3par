@@ -1,0 +1,92 @@
+diff --git a/check_3par b/check_3par
+index c65f43a..5346ab2 100755
+--- a/check_3par
++++ b/check_3par
+@@ -385,60 +385,60 @@ then
+     TMPOUT=$( ${CONNECTCOMMAND} showvv -showcols Name,State -notree -nohdtot 2>&1 )
+     if [ $? -gt 0 ]
+     then
+-        output UNKNOWN Could not get data from 3PAR $INSERV "\n$TMPOUT"
++        output UNKNOWN "Could not get data from 3PAR ${INSERV} \n${TMPOUT}"
+     fi
+     
+     #Filter VVs
+-    TMPOUT=$( echo "$TMPOUT" | sed "s/^  *//;s/  */ /g; /vv base/ p;d" )
++    TMPOUT=$( echo "${TMPOUT}" | sed "s/^  *//;s/  */ /g; /vv base/ p;d" )
+ 
+-    if [ $( echo "$TMPOUT" | grep -c -i failed ) -gt 0 ]
++    if [ $( echo "${TMPOUT}" | grep -c -i failed ) -gt 0 ]
+     then
+         case ${VERBOSE} in
+-                0) output CRITICAL There are failed VVs \
+-                    "$( echo "$TMPOUT" | grep -c -i failed )" Contact 3PAR support ;;
++                0) output CRITICAL "There are failed VVs" \
++                    "$( echo "${TMPOUT}" | grep -c -i failed )" Contact 3PAR support ;;
+ 
+-                1) output CRITICAL There are failed VVs \
+-                    "$( echo "$TMPOUT" | grep -i failed | tr -d '\n')" ;;
++                1) output CRITICAL "There are failed VVs" \
++                    "$( echo "${TMPOUT}" | grep -i failed | tr -d '\n')" ;;
+ 
+-                2)  OKVOLUMES=$(echo "$TMPOUT" | grep -i failed \
++                2)  OKVOLUMES=$(echo "${TMPOUT}" | grep -i failed \
+                     | cut -f 2,7,8,11,12 -d " " | sort -n \
+                     | sed "s/\(.*\) \(.*\) \(.*\) \(.*\) \(.*\)/\1 \2 \3 size \5MB used \4MB /")
+-                    output CRITICAL There are failed VVs "\n$OKVOLUMES" ;;
++                    output CRITICAL "There are failed VVs \n${OKVOLUMES}" ;;
+                     
+-                *)  OKVOLUMES=$(echo "$TMPOUT" | grep -i failed | sort -n )
+-                    output CRITICAL There are failed VVs "\n$OKVOLUMES" ;;
++                *)  OKVOLUMES=$(echo "${TMPOUT}" | grep -i failed | sort -n )
++                    output CRITICAL "There are failed VVs \n${OKVOLUMES}" ;;
+         esac
+     else
+         if [ $( echo "${TMPOUT}" | grep -c -i degraded ) -gt 0 ]
+         then
+             case ${VERBOSE} in
+-                0) output WARNING There are degraded VVs \
+-                    "$( echo "$TMPOUT" | grep -c -i degraded )" Contact 3PAR support ;;
++                0) output WARNING "There are degraded VVs" \
++                    "$( echo "${TMPOUT}" | grep -c -i degraded )" Contact 3PAR support ;;
+ 
+-                1) output WARNING There are degraded VVs \
+-                    "$( echo "$TMPOUT" | grep -i degraded | tr -d '\n')" ;;
++                1) output WARNING "There are degraded VVs" \
++                    "$( echo "${TMPOUT}" | grep -i degraded | tr -d '\n')" ;;
+ 
+-                2)  OKVOLUMES=$(echo "$TMPOUT" | grep -i degraded \
++                2)  OKVOLUMES=$(echo "${TMPOUT}" | grep -i degraded \
+                     | cut -f 2,7,8,11,12 -d " " | sort -n \
+                     | sed "s/\(.*\) \(.*\) \(.*\) \(.*\) \(.*\)/\1 \2 \3 size \5MB used \4MB /")
+-                    output WARNING There are degraded VVs "\n$OKVOLUMES" ;;
++                    output WARNING "There are degraded VVs\n${OKVOLUMES}" ;;
+                     
+-                *)  OKVOLUMES=$(echo "$TMPOUT" | grep -i degraded | sort -n )
+-                    output WARNING There are degraded VVs "\n$OKVOLUMES" ;;
++                *)  OKVOLUMES=$(echo "${TMPOUT}" | grep -i degraded | sort -n )
++                    output WARNING "There are degraded VVs\n${OKVOLUMES}" ;;
+             esac
+         else
+             case ${VERBOSE} in
+-                0)  output OK All $(echo "$TMPOUT" | wc -l ) VVs are normal ;;
++                0)  output OK "All $(echo "${TMPOUT}" | wc -l ) VVs are normal" ;;
+                 
+-                1)  OKVOLUMES=$(echo "$TMPOUT" | cut -f 2 -d " " | sort -n ) 
+-                    output OK All $(echo "$TMPOUT" | wc -l ) VVs are normal $OKVOLUMES ;;
++                1)  OKVOLUMES=$(echo "${TMPOUT}" | cut -f 2 -d " " | sort -n ) 
++                    output OK All $(echo "${TMPOUT}" | wc -l ) VVs are normal ${OKVOLUMES} ;;
+ 
+-                2)  OKVOLUMES=$(echo "$TMPOUT" | cut -f 2,7,11,12 -d " " | sort -n \
++                2)  OKVOLUMES=$(echo "${TMPOUT}" | cut -f 2,7,11,12 -d " " | sort -n \
+                         | sed "s/\(.*\) \(.*\) \(.*\) \(.*\)/\1 \2 size \4MB used \3MB /")
+-                    output OK All $(echo "$TMPOUT" | wc -l ) VVs are normal "\n$OKVOLUMES" ;;
++                    output OK All $(echo "${TMPOUT}" | wc -l ) VVs are normal "\n${OKVOLUMES}" ;;
+ 
+-                *)  OKVOLUMES=$(echo "$TMPOUT" | sort -n )
+-                    output OK All $(echo "$TMPOUT" | wc -l ) VVs are normal "\n$OKVOLUMES" ;;
++                *)  OKVOLUMES=$(echo "${TMPOUT}" | sort -n )
++                    output OK All $(echo "${TMPOUT}" | wc -l ) VVs are normal "\n${OKVOLUMES}" ;;
+             esac
+         fi
+     fi
+

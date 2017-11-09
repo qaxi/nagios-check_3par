@@ -26,6 +26,7 @@
 VERSION="1.2.2"
 CAPWARN=80  # warning at 80% of used disc capacity
 CAPCRIT=90  # warnint at 90% of user disc capacity
+VERBOSE=0   # how verbose to be
 
 # Strict variable checking
 set -u # stop on use of unset var 
@@ -158,7 +159,7 @@ while getopts "${OPTS}" OPTION ; do
     dbg "option ${OPTION} optind ${OPTIND} optarg ${OPTARG:-}"
     case "${OPTION}" in
         d  ) DBG="y";;
-        v  ) usage "Not implemented yet" ;;
+        v  ) VERBOSE=$((++VERBOSE)) ;;
         h  ) usage ;;   
         H  ) INSERV="${OPTARG}" ;;
         i  ) INFORMBIN="${OPTARG}" ;;
@@ -174,7 +175,7 @@ while getopts "${OPTS}" OPTION ; do
             dbg "- option ${OPTION} optind ${OPTIND} optarg ${OPTARG}"
             case ${OPTION} in
                 --debug )           DBG="y" ;;
-                --verbose)          usage "Not implemented yet" ;;
+                --verbose)          VERBOSE=$((++VERBOSE)) ;;
                 --help )            helplong ;;
                 --hostname )        INSERV="${OPTARG}" ;;
                 --inform-bin )      INFORMBIN="${OPTARG}" ;;
@@ -228,7 +229,7 @@ function output () {
         *   ) RET=${RETUNKN} ; OUT="Unknown: bad parameter STATUS for output()" ;;
     esac
 
-    echo "${OUT}"
+    echo -e "${OUT}"
     exit ${RET}
 }
 
@@ -383,59 +384,48 @@ fi
 if [ "${COMMAND}" == "check_vv" ]
 then
     TMPOUT=$( ${CONNECTCOMMAND} showvv -showcols Name,State -notree -nohdtot 2>&1 )
+
     if [ $? -gt 0 ]
     then
-        output UNKNOWN Could not get data from 3PAR $INSERV "\n$TMPOUT"
+        output UNKNOWN "Could not get data from 3PAR ${INSERV} \n${TMPOUT}"
     fi
     
-    if [ $( echo "$TMPOUT" | grep -c -i failed ) -gt 0 ]
+    FAILCOUNT=$(echo "${TMPOUT}" | grep -c -i 'failed' )
+    if [ "${FAILCOUNT}" -gt 0 ]
     then
         case ${VERBOSE} in
-                0) output CRITICAL There are failed VVs \
-                    "$( echo "$TMPOUT" | grep -c -i failed )" Contact 3PAR support ;;
+            0)  output CRITICAL "There are failed VVs (${FAILCOUNT})." ;;
 
-                1) output CRITICAL There are failed VVs \
-                    "$( echo "$TMPOUT" | grep -i failed | tr -d '\n')" ;;
+            1)  FAILVOLUMES=$(echo "${TMPOUT}" | sed '/failed/ s/ *failed *//p;d' | tr '\n' ' ')
+                output CRITICAL "There are failed VVs (${FAILCOUNT}) - ${FAILVOLUMES}" ;;
 
-                2)  OKVOLUMES=$(echo "$TMPOUT" | grep -i failed \
-                    | cut -f 2,7,8,11,12 -d " " | sort -n \
-                    | sed "s/\(.*\) \(.*\) \(.*\) \(.*\) \(.*\)/\1 \2 \3 size \5MB used \4MB /")
-                    output CRITICAL There are failed VVs "\n$OKVOLUMES" ;;
-                    
-                *)  OKVOLUMES=$(echo "$TMPOUT" | grep -i failed | sort -n )
-                    output CRITICAL There are failed VVs "\n$OKVOLUMES" ;;
+            2)  FAILVOLUMES=$(echo "${TMPOUT}" | grep 'failed')
+                output CRITICAL "There are failed VVs (${FAILCOUNT})\n${FAILVOLUMES}" ;;
         esac
     else
-        if [ $( echo "${TMPOUT}" | grep -c -i degraded ) -gt 0 ]
+        DEGRADCOUNT=$( echo "${TMPOUT}" | grep -c -i 'degraded' )
+        if [ "${DEGRADCOUNT}" -gt 0 ]
         then
             case ${VERBOSE} in
-                0) output WARNING There are degraded VVs \
-                    "$( echo "$TMPOUT" | grep -c -i degraded )" Contact 3PAR support ;;
+                0)  output WARNING "There are degraded VVs (${DEGRADCOUNT})." ;;
+                
+                1)  DEGRADVOLUMES=$(echo "${TMPOUT}" \
+                                    | sed '/degraded/ s/ *degraded *//p;d' | tr '\n' ' ')
+                    output WARNING "There are degraded VVs (${DEGRADCOUNT}) - ${DEGRADVOLUMES}" ;;
 
-                1) output WARNING There are degraded VVs \
-                    "$( echo "$TMPOUT" | grep -i degraded | tr -d '\n')" ;;
-
-                2)  OKVOLUMES=$(echo "$TMPOUT" | grep -i degraded \
-                    | cut -f 2,7,8,11,12 -d " " | sort -n \
-                    | sed "s/\(.*\) \(.*\) \(.*\) \(.*\) \(.*\)/\1 \2 \3 size \5MB used \4MB /")
-                    output WARNING There are degraded VVs "\n$OKVOLUMES" ;;
-                    
-                *)  OKVOLUMES=$(echo "$TMPOUT" | grep -i degraded | sort -n )
-                    output WARNING There are degraded VVs "\n$OKVOLUMES" ;;
+                *)  DEGRADVOLUMES=$(echo "${TMPOUT}" | grep 'degraded' )
+                    output WARNING "There are degraded VVs (${DEGRADCOUNT})\n${DEGRADVOLUMES}" ;;
             esac
         else
+            OKCOUNT=$(echo "${TMPOUT}" | grep -c normal )
             case ${VERBOSE} in
-                0)  output OK All $(echo "$TMPOUT" | grep -c normal ) VVs are normal ;;
+                0)  output OK "All ${OKCOUNT} VVs are normal" ;;
                 
-                1)  OKVOLUMES=$(echo "$TMPOUT" | cut -f 2 -d " " | sort -n ) 
-                    output OK All $(echo "$TMPOUT" | wc -l ) VVs are normal $OKVOLUMES ;;
+                1)  OKVOLUMES=$(echo "${TMPOUT}" | cut -f 1 -d " " | sort -n | tr '\n' ' ' ) 
+                    output OK "All ${OKCOUNT} VVs are normal: ${OKVOLUMES}" ;;
 
-                2)  OKVOLUMES=$(echo "$TMPOUT" | cut -f 2,7,11,12 -d " " | sort -n \
-                        | sed "s/\(.*\) \(.*\) \(.*\) \(.*\)/\1 \2 size \4MB used \3MB /")
-                    output OK All $(echo "$TMPOUT" | wc -l ) VVs are normal "\n$OKVOLUMES" ;;
-
-                *)  OKVOLUMES=$(echo "$TMPOUT" | sort -n )
-                    output OK All $(echo "$TMPOUT" | wc -l ) VVs are normal "\n$OKVOLUMES" ;;
+                *)  OKVOLUMES=$(echo "${TMPOUT}" | sort -n )
+                    output OK "All ${OKCOUNT} VVs are normal \n${OKVOLUMES}" ;;
             esac
         fi
     fi
