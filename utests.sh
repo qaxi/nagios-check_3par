@@ -133,7 +133,7 @@ function utest() {
     else
         echo 
         echo "############################################"
-        echo "# Failed \$CMD $@"
+        echo "# Failed $CMD $@"
         echo "# Expected return '$RET' but get '$CMDRET'."
         echo "##########"
         echo "$CMDOUT"
