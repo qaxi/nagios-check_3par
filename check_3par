@@ -23,7 +23,7 @@
 # to this script
 #
 
-VERSION="1.2.1"
+VERSION="1.2.2"
 CAPWARN=80  # warning at 80% of used disc capacity
 CAPCRIT=90  # warnint at 90% of user disc capacity
 
@@ -388,9 +388,6 @@ then
         output UNKNOWN Could not get data from 3PAR $INSERV "\n$TMPOUT"
     fi
     
-    #Filter VVs
-    TMPOUT=$( echo "$TMPOUT" | sed "s/^  *//;s/  */ /g; /vv base/ p;d" )
-
     if [ $( echo "$TMPOUT" | grep -c -i failed ) -gt 0 ]
     then
         case ${VERBOSE} in
@@ -428,7 +425,7 @@ then
             esac
         else
             case ${VERBOSE} in
-                0)  output OK All $(echo "$TMPOUT" | wc -l ) VVs are normal ;;
+                0)  output OK All $(echo "$TMPOUT" | grep -c normal ) VVs are normal ;;
                 
                 1)  OKVOLUMES=$(echo "$TMPOUT" | cut -f 2 -d " " | sort -n ) 
                     output OK All $(echo "$TMPOUT" | wc -l ) VVs are normal $OKVOLUMES ;;
