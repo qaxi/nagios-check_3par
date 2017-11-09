@@ -27,22 +27,30 @@
 VERSION="1.2"
 CAPWARN=80  # warning at 80% of used disc capacity
 CAPCRIT=90  # warnint at 90% of user disc capacity
-VERBOSE=0
-DBG="n"
+
+# Strict variable checking
+set -u # stop on use of unset var 
+#set -e ; set -E  # stop on unexpected error
+
+# Debugging help 
+#export PS4='+${LINENO}:${FUNCNAME[0]-}: ' # better -x output
+#trap 'set +x ; echo -e "Unexpected ERROR \n[$BASH_SOURCE:$LINENO:${FUNCNAME[0]- =>}] "; nl -b a -s : "$BASH_SOURCE" | grep -A 3 "^ *${LINENO}:"' ERR
 
 PRGNAME=$(basename "$0")
 
-function dbg() { [ "$DBG" = "y" ] && echo "DBG: $*" >&2 ; }
+DBG="n"
+function dbg() { [ "${DBG}" = "y" ] && echo "DBG: $*" >&2 ; }
 
 OPTS=':hH:i:u:k:p:w:c:d-:'   # first : and lsast - is mandatory
 function usage() {
     [ -n "$*" ] && {
+        exec 1>&2   # redirect STDOUT to STDERR for rest of script
         echo "${PRGNAME} ERROR: $*"
         echo ""
     }
 
     help
-    exit 3
+    exit 128
 }
 
 function help() {
@@ -64,7 +72,7 @@ Options:
                 3PAR username
     -k, --ssh-key=PRIVATE_KEY_FILE
                 For ssh login, use this file as a key, instead of default identity
-                file (usually $HOME/.ssh/identity)
+                file (usually \${HOME}/.ssh/identity)
     -p, --password-file=PATH
                 Password file for 3PAR Inform CLI
     -w, --warning=TRESHOLD (default: 80)
@@ -109,16 +117,16 @@ echo "Supported commands
                    error ->         Critical
 
    check_cap_ssd : Check used SSD capacity
-                   >= $CAPWARN ->         Warning
-                   >= $CAPCRIT ->         Critical
+                   >= ${CAPWARN} ->         Warning
+                   >= ${CAPCRIT} ->         Critical
 
    check_cap_fc :   Check used FC capacity
-                   >= $CAPWARN ->         Warning
-                   >= $CAPCRIT ->         Critical
+                   >= ${CAPWARN} ->         Warning
+                   >= ${CAPCRIT} ->         Critical
 
    check_cap_nl : Check used NL capacity 
-                   >= $CAPWARN ->         Warning
-                   >= $CAPCRIT ->         Critical
+                   >= ${CAPWARN} ->         Warning
+                   >= ${CAPCRIT} ->         Critical
 
    check_ps_node : Check Power Supply Node
                    Degraded ->      Warning
@@ -141,47 +149,46 @@ echo "Supported commands
    check_alerts : Check status of system alerts
 
 "
-exit 3
+exit 128
+
 }
 
 [ "$#" = 0 ] &&  usage "Too few arguments."
 
-while getopts "$OPTS" OPTION ; do
-    dbg "option $OPTION optind $OPTIND optarg $OPTARG"
-    case "$OPTION" in
+while getopts "${OPTS}" OPTION ; do
+    dbg "option ${OPTION} optind ${OPTIND} optarg ${OPTARG:-}"
+    case "${OPTION}" in
         d  ) DBG="y";;
-        h  ) helplong ;;   
-        H  ) INSERV="$OPTARG" ;;
-        i  ) INFORMBIN="$OPTARG" ;;
-        u  ) USERNAME="$OPTARG" ;;
-        k  ) KEYFILE="$OPTARG" ;;
-        p  ) PASSFILE="$OPTARG" ;;
-        w  ) CAPWARN="$OPTARG" ;;
-        c  ) CAPCRIT="$OPTARG" ;;
-        v  ) ((VERBOSE++)) ;;
-        -  ) [ $OPTIND -ge 1 ] && optind=$(expr $OPTIND - 1 ) || optind=$OPTIND
+        h  ) usage ;;   
+        H  ) INSERV="${OPTARG}" ;;
+        i  ) INFORMBIN="${OPTARG}" ;;
+        u  ) USERNAME="${OPTARG}" ;;
+        k  ) KEYFILE="${OPTARG}" ;;
+        p  ) PASSFILE="${OPTARG}" ;;
+        w  ) CAPWARN="${OPTARG}" ;;
+        c  ) CAPCRIT="${OPTARG}" ;;
+        -  ) [ ${OPTIND} -ge 1 ] && optind=$(expr ${OPTIND} - 1 ) || optind=${OPTIND}
             eval OPTION="\$$optind"
-            OPTARG=$(echo $OPTION | cut -d'=' -f2)
-            OPTION=$(echo $OPTION | cut -d'=' -f1)
-            dbg "- option $OPTION optind $OPTIND optarg $OPTARG"
-            case $OPTION in
+            OPTARG=$(echo ${OPTION} | cut -d'=' -f2)
+            OPTION=$(echo ${OPTION} | cut -d'=' -f1)
+            dbg "- option ${OPTION} optind ${OPTIND} optarg ${OPTARG}"
+            case ${OPTION} in
                 --debug )           DBG="y" ;;
                 --help )            helplong ;;
-                --hostname )        INSERV="$OPTARG" ;;
-                --inform-bin )      INFORMBIN="$OPTARG" ;;
-                --username )        USERNAME="$OPTARG" ;;
-                --ssh-key )         KEYFILE="$OPTARG" ;;
-                --password-file )   USERNAME="$OPTARG" ;;
-                --warning )         CAPWARN="$OPTARG" ;;
-                --critical )        CAPCRIT="$OPTARG" ;;
-                --verbose )         ((VERBOSE++)) ;;
-                ?  )  usage "Invalid option '$OPTARG'" ;;
+                --hostname )        INSERV="${OPTARG}" ;;
+                --inform-bin )      INFORMBIN="${OPTARG}" ;;
+                --username )        USERNAME="${OPTARG}" ;;
+                --ssh-key )         KEYFILE="${OPTARG}" ;;
+                --password-file )   USERNAME="${OPTARG}" ;;
+                --warning )         CAPWARN="${OPTARG}" ;;
+                --critical )        CAPCRIT="${OPTARG}" ;;
+                ?  )  usage "Invalid option '${OPTARG}'" ;;
                 *  )  usage "parsing options failed";;
             esac
             #OPTIND=1
             #shift
             ;;
-        ?  )  usage "Invalid option '$OPTARG'"  ;;
+        ?  )  usage "Invalid option '${OPTARG}'"  ;;
         *  )  usage "parsing options failed";;
     esac
 done
@@ -189,13 +196,16 @@ done
 shift $((OPTIND-1))
 
 dbg "3PAR command: $*"
-dbg OPTION: $OPTION OPTIND: $OPTIND OPTARG: $OPTARG
-dbg verbosity: $VERBOSE
+dbg "OPTION: ${OPTION} OPTIND: ${OPTIND} OPTARG: ${OPTARG:-}"
 
 # 0 OK The plugin was able to check the service and it appeared to be functioning properly
 # 1 Warning The plugin was able to check the service, but it appeared to be above some "warning" threshold or did not appear to be working properly
 # 2 Critical The plugin detected that either the service was not running or it was above some "critical" threshold
 # 3 Unknown Invalid command line arguments were supplied to the plugin or low-level failures 
+RETOK=0
+RETWARN=1
+RETCRIT=2
+RETUNKN=3
 
 # -v
 # 0 Single line, minimal output. Summary
@@ -205,162 +215,173 @@ dbg verbosity: $VERBOSE
 
 # Output Nagios compatible string and exit
 function output () {
-    STATUS=$1
+    STATUS="$1"
     shift
     OUTPUT="$@"
 
-    case "$STATUS" in
-        OK              ) RET=0 ; OUT="OK: $OUTPUT" ;;
-        WARN | WARNING  ) RET=1 ; OUT="Warning: $OUTPUT" ;;
-        CRIT | CRITICAL ) RET=2 ; OUT="Critical: $OUTPUT" ;;
-        UNKN | UNKNOWN  ) RET=3 ; OUT="Unknown: $OUTPUT" ;;
-        *   ) RET=3 ; OUT="Unknown: bad parameter STATUS for output()" ;;
+    case "${STATUS}" in
+        OK              ) RET=${RETOK}   ; OUT="OK: ${OUTPUT}" ;;
+        WARN | WARNING  ) RET=${RETWARN} ; OUT="Warning: ${OUTPUT}" ;;
+        CRIT | CRITICAL ) RET=${RETCRIT} ; OUT="Critical: ${OUTPUT}" ;;
+        UNKN | UNKNOWN  ) RET=${RETUNKN} ; OUT="Unknown: ${OUTPUT}" ;;
+        *   ) RET=${RETUNKN} ; OUT="Unknown: bad parameter STATUS for output()" ;;
     esac
 
-    echo -e "$OUT"
-    exit $RET
+    echo "${OUT}"
+    exit ${RET}
 }
 
+COMMAND="${1:-}"
+[ -z "${COMMAND}" ] && usage "COMMAND is not set"
 
-COMMAND="$1"
-CMDARG1="$2"
+CMDARG1="${2:-}"
+
 TMPOUT=""
-PCCRITICALFC="$CAPCRIT"
-PCWARNINGFC="$CAPWARN"
-PCCRITICALNL="$CAPCRIT"
-PCWARNINGNL="$CAPWARN"
-PCCRITICALSSD="$CAPCRIT"
-PCWARNINGSSD="$CAPWARN"
-CRITICAL="$CAPCRIT"
-WARNING="$CAPWARN"
+PCCRITICALFC="${CAPCRIT}"
+PCWARNINGFC="${CAPWARN}"
+PCCRITICALNL="${CAPCRIT}"
+PCWARNINGNL="${CAPWARN}"
+PCCRITICALSSD="${CAPCRIT}"
+PCWARNINGSSD="${CAPWARN}"
+CRITICAL="${CAPCRIT}"
+WARNING="${CAPWARN}"
 
 # CLI or SSH
-if [ -n "$INFORMBIN" ]
+if [ -n "${INFORMBIN:-}" ]
 then
     # To connect using the 3PAR CLI, use option -i and -p to setup the command 
-    CONNECTCOMMAND="$INFORMBIN -sys $INSERV -pwf $PASSFILE"
+    CONNECTCOMMAND="${INFORMBIN} -sys ${INSERV} -pwf ${PASSFILE}"
     # Note : connecting using the CLI requires creating password files (.pwf)
 else
     # To connect using SSH use -u option to set username
     # Note : connecting using SSH requires setting public key authentication
-    if [ -n "$USERNAME" ]
+    if [ -n "${USERNAME:-}" ]
     then
-    	usage "Use either -u <username> or -i <inform_bin>
+    	usage "Use either -u <username> or -i <inform_bin>"
     else
-    	if [ -n "$KEYFILE" ]
-	then
-	    CONNECTCOMMAND="ssh $USERNAME@$INSERV -i $KEYFILE"
-	else
-	    CONNECTCOMMAND="ssh $USERNAME@$INSERV "
-	fi
+        if [ -n "${KEYFILE}" ]
+        then
+            CONNECTCOMMAND="ssh ${USERNAME}@${INSERV} -i ${KEYFILE} "
+        else
+            CONNECTCOMMAND="ssh ${USERNAME}@{$INSERV} "
+        fi
+    fi
 fi
 
-if [ "$COMMAND" == "check_pd" ]
+if [ "${COMMAND}" == "check_pd" ]
 then
-    TMPOUT=$( $CONNECTCOMMAND showpd -showcols Id,State -nohdtot 2>&1 )
+    TMPOUT=$( ${CONNECTCOMMAND} showpd -showcols Id,State -nohdtot 2>&1 )
     if [ $? -gt 0 ]
     then
-        echo Could not connect to 3PAR "$INSERV"
+        echo "Could not connect to 3PAR ${INSERV}"
         exit 3
     fi
 
-    if [ $( echo "$TMPOUT" | grep -c failed ) -gt 0 ]
+    if [ $( echo "${TMPOUT}" | grep -c failed ) -gt 0 ]
     then
-        echo CRITICAL! The following PDs have abnormal status : $( echo "$TMPOUT" | grep -v normal | tr -d '\n' )
+        echo "CRITICAL! The following PDs have abnormal status : " \
+            "$( echo "${TMPOUT}" | grep -v normal | tr -d '\n' )"
         exit 2
     else
-        if [ $( echo "$TMPOUT" | grep -c failed ) -gt 0 ]
+        if [ $( echo "${TMPOUT}" | grep -c failed ) -gt 0 ]
         then    
-            echo WARNING! The following PDs have abnormal status : $( echo "$TMPOUT" | grep -v normal | tr -d '\n' )
+            echo "WARNING! The following PDs have abnormal status : " \
+                "$( echo "${TMPOUT}" | grep -v normal | tr -d '\n' )"
             exit 1
         else
-            echo OK : All PDs have normal status
+            echo "OK : All PDs have normal status "
             exit 0
         fi
     fi
 fi
 
 
-if [ "$COMMAND" == "check_node" ]
+if [ "${COMMAND}" == "check_node" ]
 then
-    TMPOUT=$( $CONNECTCOMMAND shownode -s -nohdtot 2>&1 )
+    TMPOUT=$( ${CONNECTCOMMAND} shownode -s -nohdtot 2>&1 )
     if [ $? -gt 0 ]
     then
-        echo Could not connect to 3PAR $INSERV
+        echo "Could not connect to 3PAR ${INSERV}"
         exit 3
     fi
 
-    if [ $( echo "$TMPOUT" | grep -c -i failed ) -gt 0 ]
+    if [ $( echo "${TMPOUT}" | grep -c -i failed ) -gt 0 ]
     then
-        echo CRITICAL! The following nodes have abnormal status : $( echo "$TMPOUT" | grep -i failed | tr -s " " | tr -d '\n' )
+        echo "CRITICAL! The following nodes have abnormal status : " \
+            "$( echo "${TMPOUT}" | grep -i failed | tr -s " " | tr -d '\n' )"
         exit 2
     else
-        if [ $( echo "$TMPOUT" | grep -c -i degraded ) -gt 0 ]
+        if [ $( echo "${TMPOUT}" | grep -c -i degraded ) -gt 0 ]
         then
-            echo WARNING! The following nodes have abnormal status : $( echo "$TMPOUT" | grep -i degraded | tr -s " " | tr -d '\n' )
+            echo "WARNING! The following nodes have abnormal status : " \
+                "$( echo "${TMPOUT}" | grep -i degraded | tr -s " " | tr -d '\n' )"
             exit 1
         else
-            echo OK : All nodes have normal status
+            echo "OK : All nodes have normal status"
             exit 0
         fi
     fi
 fi
 
-if [ "$COMMAND" == "check_ps_node" ] || [ "$COMMAND" == "check_ps" ]
+if [ "${COMMAND}" == "check_ps_node" ] || [ "${COMMAND}" == "check_ps" ]
 then
-    TMPOUT=$( $CONNECTCOMMAND shownode -ps 2>&1 )
+    TMPOUT=$( ${CONNECTCOMMAND} shownode -ps 2>&1 )
     if [ $? -gt 0 ]
     then
-        echo Could not connect to 3PAR $INSERV
+        echo "Could not connect to 3PAR ${INSERV}"
         RC=3
     fi
 
-    if [ $( echo "$TMPOUT" | grep -c -i failed ) -gt 0 ]
+    if [ $( echo "${TMPOUT}" | grep -c -i failed ) -gt 0 ]
     then
-        echo CRITICAL! The following nodes have abnormal status : $( echo "$TMPOUT" | grep -i failed | tr -s " " | tr -d '\n' )
+        echo "CRITICAL! The following nodes have abnormal status : " \ 
+            "$( echo "${TMPOUT}" | grep -i failed | tr -s " " | tr -d '\n' )"
         RC=2
     else
-        if [ $( echo "$TMPOUT" | grep -c -i degraded ) -gt 0 ]
+        if [ $( echo "${TMPOUT}" | grep -c -i degraded ) -gt 0 ]
         then
-            echo WARNING! The following nodes have abnormal status : $( echo "$TMPOUT" | grep -i degraded | tr -s " " | tr -d '\n' )
+            echo "WARNING! The following nodes have abnormal status : " \
+                "$( echo "${TMPOUT}" | grep -i degraded | tr -s " " | tr -d '\n' )"
             RC=1
         else
-            echo OK : All nodes have normal status
+            echo "OK : All nodes have normal status"
             RC=0
         fi
     fi
-    exit $RC
+    exit ${RC}
 fi
 
-if [ "$COMMAND" == "check_ps_cage" ]
+if [ "${COMMAND}" == "check_ps_cage" ]
 then
-    TMPOUT=$( $CONNECTCOMMAND showcage -d 2>&1 )
+    TMPOUT=$( ${CONNECTCOMMAND} showcage -d 2>&1 )
     if [ $? -gt 0 ]
     then
-        echo Could not connect to 3PAR $INSERV
+        echo "Could not connect to 3PAR ${INSERV}"
         RC=3
     fi
 
-    if [ $( echo "$TMPOUT" | awk '{ if ($0 ~ "------Cage") cage=$5; if ($0 ~ "Failed") print cage" "$0}' | wc -l ) -gt 0 ]
+    if [ $( echo "${TMPOUT}" | awk '{ if ($0 ~ "------Cage") cage=$5; if ($0 ~ "Failed") print cage" "$0}' | wc -l ) -gt 0 ]
     then
-        echo CRITICAL! The following cages have abnormal status : $( echo "$TMPOUT" | awk '{ if ($0 ~ "------Cage") cage=$5; if ($0 ~ "Failed") print cage" "$0}' | tr -s " " | tr -d '\n' )
+        echo "CRITICAL! The following cages have abnormal status : " \
+            "$( echo "${TMPOUT}" | awk '{ if ($0 ~ "------Cage") cage=$5; if ($0 ~ "Failed") print cage" "$0}' | tr -s " " | tr -d '\n' )"
         RC=2
     else
-        if [ $( echo "$TMPOUT" | awk '{ if ($0 ~ "------Cage") cage=$5; if ($0 ~ "Degraded") print cage" "$0}' | wc -l ) -gt 0 ]
+        if [ $( echo "${TMPOUT}" | awk '{ if ($0 ~ "------Cage") cage=$5; if ($0 ~ "Degraded") print cage" "$0}' | wc -l ) -gt 0 ]
         then
-            echo WARNING! The following cages have abnormal status : $( echo "$TMPOUT" | awk '{ if ($0 ~ "------Cage") cage=$5; if ($0 ~ "Degraded") print cage" "$0}' | tr -s " " | tr -d '\n' )
+            echo "WARNING! The following cages have abnormal status : " \ 
+                "$( echo "${TMPOUT}" | awk '{ if ($0 ~ "------Cage") cage=$5; if ($0 ~ "Degraded") print cage" "$0}' | tr -s " " | tr -d '\n' )"
             RC=1
         else
-            echo OK : All nodes have normal status
+            echo "OK : All nodes have normal status"
             RC=0
         fi
     fi
-    exit $RC
+    exit ${RC}
 fi
 
-if [ "$COMMAND" == "check_vv" ]
+if [ "${COMMAND}" == "check_vv" ]
 then
-    TMPOUT=$( $CONNECTCOMMAND showvv -notree -nohdtot 2>&1 )
+    TMPOUT=$( ${CONNECTCOMMAND} showvv -showcols Name,State -notree -nohdtot 2>&1 )
     if [ $? -gt 0 ]
     then
         output UNKNOWN Could not get data from 3PAR $INSERV "\n$TMPOUT"
@@ -387,7 +408,7 @@ then
                     output CRITICAL There are failed VVs "\n$OKVOLUMES" ;;
         esac
     else
-        if [ $( echo "$TMPOUT" | grep -c -i degraded ) -gt 0 ]
+        if [ $( echo "${TMPOUT}" | grep -c -i degraded ) -gt 0 ]
         then
             case $VERBOSE in
                 0) output WARNING There are degraded VVs \
@@ -423,308 +444,309 @@ then
 fi
 
 
-if [ "$COMMAND" == "check_ld" ]
+if [ "${COMMAND}" == "check_ld" ]
 then
-    TMPOUT=$( $CONNECTCOMMAND showld -state -nohdtot 2>&1 )
+    TMPOUT=$( ${CONNECTCOMMAND} showld -state -nohdtot 2>&1 )
     if [ $? -gt 0 ]
     then
-        echo Could not connect to 3PAR $INSERV
+        echo "Could not connect to 3PAR ${INSERV}"
         exit 3
     fi
 
-    if [ $( echo "$TMPOUT" | grep -c -i failed ) -gt 0 ]
+    if [ $( echo "${TMPOUT}" | grep -c -i failed ) -gt 0 ]
     then
-        echo CRITICAL! There are failed LDs. Contact 3PAR support
+        echo "CRITICAL! There are failed LDs. Contact 3PAR support"
         exit 2
     else
-        if [ $( echo "$TMPOUT" | grep -c -i degraded ) -gt 0 ]
+        if [ $( echo "${TMPOUT}" | grep -c -i degraded ) -gt 0 ]
         then
-            echo WARNING! There are degraded LDs. Contact 3PAR support
+            echo "WARNING! There are degraded LDs. Contact 3PAR support"
             exit 1
         else
-            echo OK : All LDs have normal status
+            echo "OK : All LDs have normal status"
             exit 0
         fi
     fi
 fi
 
-if [ "$COMMAND" == "check_port_fc" ]
+if [ "${COMMAND}" == "check_port_fc" ]
 then
-    TMPOUT=$( $CONNECTCOMMAND showport -nohdtot 2>&1 )
+    TMPOUT=$( ${CONNECTCOMMAND} showport -nohdtot 2>&1 )
     if [ $? -gt 0 ]
     then
-        echo Could not connect to 3PAR $INSERV
+        echo "Could not connect to 3PAR ${INSERV}"
         exit 3
     fi
-	TMPOUT=$( echo "$TMPOUT" | grep -v -i iscsi 2>&1 | grep -v -i rcip 2>&1 | grep -v -i free 2>&1)
+	TMPOUT=$( echo "${TMPOUT}" | grep -v -i iscsi 2>&1 | grep -v -i rcip 2>&1 | grep -v -i free 2>&1)
 
-    if [ $( echo "$TMPOUT" | grep -c -i error ) -gt 0 ]
+    if [ $( echo "${TMPOUT}" | grep -c -i error ) -gt 0 ]
     then
-        echo CRITICAL! Some ports are in the error state
+        echo "CRITICAL! Some ports are in the error state"
         exit 2
     else
-        if [ $( echo "$TMPOUT" | grep -c -i loss_sync ) -gt 0 ] || [ $( echo "$TMPOUT" | grep -c -i config_wait ) -gt 0 ] || [ $( echo "$TMPOUT" | grep -c -i login_wait ) -gt 0 ] || [ $( echo "$TMPOUT" | grep -c -i non_participate ) -gt 0 ]
+        if [ $( echo "${TMPOUT}" | grep -c -i loss_sync ) -gt 0 ] || [ $( echo "${TMPOUT}" | grep -c -i config_wait ) -gt 0 ] || [ $( echo "${TMPOUT}" | grep -c -i login_wait ) -gt 0 ] || [ $( echo "${TMPOUT}" | grep -c -i non_participate ) -gt 0 ]
         then
-            echo WARNING! Some ports are in an abnormal state \(loss_sync, config_wait, login_wait or non_participate\)
+            echo "WARNING! Some ports are in an abnormal state " \
+                "(loss_sync, config_wait, login_wait or non_participate)"
             exit 1
         else
-            echo OK : All FC ports have normal status \(ready or offline\)
+            echo "OK : All FC ports have normal status (ready or offline)"
             exit 0
         fi
     fi
 fi
 
-if [ "$COMMAND" == "check_cap_ssd" ]
+if [ "${COMMAND}" == "check_cap_ssd" ]
 then
-    TMPOUT=$( $CONNECTCOMMAND showpd -p -devtype SSD -showcols Size_MB,Free_MB -csvtable 2>&1 )
+    TMPOUT=$( ${CONNECTCOMMAND} showpd -p -devtype SSD -showcols Size_MB,Free_MB -csvtable 2>&1 )
     if [ $? -gt 0 ]
     then
-        echo Could not connect to 3PAR $INSERV
+        echo "Could not connect to 3PAR ${INSERV}"
         exit 3
     fi
 
-    LASTLINE=$( echo "$TMPOUT" | tail -1 )
-    if [ "$LASTLINE" = "No PDs listed" ] || [ "$LASTLINE" = "0,0" ]
+    LASTLINE=$( echo "${TMPOUT}" | tail -1 )
+    if [ "${LASTLINE}" = "No PDs listed" ] || [ "${LASTLINE}" = "0,0" ]
     then
-        echo No SSD disks
+        echo "No SSD disks"
         exit 0
     fi
 
-    TOTCAPSSD=$( echo "$TMPOUT" | tail -1 | cut -d, -f1 )
-    FREECAPSSD=$( echo "$TMPOUT" | tail -1 | cut -d, -f2 )
-    USEDCAPPCSSD="$(( 100 - ( ( $FREECAPSSD * 100 ) / $TOTCAPSSD ) ))"
-    USEDCAPSSD=$((($TOTCAPSSD-$FREECAPSSD)))
-    WARNCAPSSDRAW=$(($TOTCAPSSD*$PCWARNINGSSD/100))
-    CRITCAPSSDRAW=$(($TOTCAPSSD*$PCCRITICALSSD/100))
-    #TOTCAPSSDGB=$(($TOTCAPSSD/1024))
+    TOTCAPSSD=$( echo "${TMPOUT}" | tail -1 | cut -d, -f1 )
+    FREECAPSSD=$( echo "${TMPOUT}" | tail -1 | cut -d, -f2 )
+    USEDCAPPCSSD="$(( 100 - ( ( ${FREECAPSSD} * 100 ) / ${TOTCAPSSD} ) ))"
+    USEDCAPSSD=$(((${TOTCAPSSD}-${FREECAPSSD})))
+    WARNCAPSSDRAW=$((${TOTCAPSSD}*${PCWARNINGSSD}/100))
+    CRITCAPSSDRAW=$((${TOTCAPSSD}*${PCCRITICALSSD}/100))
+    #TOTCAPSSDGB=$((${TOTCAPSSD}/1024))
 
-    if [ "$USEDCAPPCSSD" -ge "$PCCRITICALSSD" ]
+    if [ "${USEDCAPPCSSD}" -ge "${PCCRITICALSSD}" ]
     then
-        echo CRITICAL! Used SSD capacity = $USEDCAPPCSSD\% \( \> $PCCRITICALSSD\% \)\|UsedSpace=$USEDCAPPCSSD\%\;$PCWARNINGSSD\;$PCCRITICALSSD UsedSpace=$USEDCAPSSD\MB\;$WARNCAPSSDRAW\;$CRITCAPSSDRAW\;0\;$TOTCAPSSD
+        echo "CRITICAL! Used SSD capacity = ${USEDCAPPCSSD}% ( > ${PCCRITICALSSD}% )|UsedSpace=${USEDCAPPCSSD}%;${PCWARNINGSSD};${PCCRITICALSSD} UsedSpace=${USEDCAPSSD}MB;${WARNCAPSSDRAW};${CRITCAPSSDRAW};0;${TOTCAPSSD}"
         exit 2
     else
-        if [ "$USEDCAPPCSSD" -ge "$PCWARNINGSSD" ]
+        if [ "${USEDCAPPCSSD}" -ge "${PCWARNINGSSD}" ]
         then
-            echo WARNING! Used SSD capacity = $USEDCAPPCSSD\% \( \> $PCWARNINGSSD\% \)\|UsedSpace=$USEDCAPPCSSD\%\;$PCWARNINGSSD\;$PCCRITICALSSD UsedSpace=$USEDCAPSSD\MB\;$WARNCAPSSDRAW\;$CRITCAPSSDRAW\;0\;$TOTCAPSSD
+            echo "WARNING! Used SSD capacity = ${USEDCAPPCSSD}% ( > ${PCWARNINGSSD}% )|UsedSpace=${USEDCAPPCSSD}%;${PCWARNINGSSD};${PCCRITICALSSD} UsedSpace=${USEDCAPSSD}MB;${WARNCAPSSDRAW};${CRITCAPSSDRAW};0;${TOTCAPSSD}"
             exit 1
         else
 
-            echo OK : Used SSD capacity = $USEDCAPPCSSD\%\|UsedSpace=$USEDCAPPCSSD\%\;$PCWARNINGSSD\;$PCCRITICALSSD UsedSpace=$USEDCAPSSD\MB\;$WARNCAPSSDRAW\;$CRITCAPSSDRAW\;0\;$TOTCAPSSD
+            echo "OK : Used SSD capacity = ${USEDCAPPCSSD}% |UsedSpace=${USEDCAPPCSSD}%;${PCWARNINGSSD};${PCCRITICALSSD} UsedSpace=${USEDCAPSSD}MB;${WARNCAPSSDRAW};${CRITCAPSSDRAW};0;${TOTCAPSSD}"
             exit 0
         fi
     fi
 fi
 
 
-if [ "$COMMAND" == "check_cap_fc" ]
+if [ "${COMMAND}" == "check_cap_fc" ]
 then
-    TMPOUT=$( $CONNECTCOMMAND showpd -p -devtype FC -showcols Size_MB,Free_MB -csvtable 2>&1 )
+    TMPOUT=$( ${CONNECTCOMMAND} showpd -p -devtype FC -showcols Size_MB,Free_MB -csvtable 2>&1 )
     if [ $? -gt 0 ]
     then
-        echo Could not connect to 3PAR $INSERV
+        echo "Could not connect to 3PAR ${INSERV}"
         exit 3
     fi
 
-    LASTLINE=$( echo "$TMPOUT" | tail -1 )
-    if [ "$LASTLINE" = "No PDs listed" ] || [ "$LASTLINE" = "0,0" ]
+    LASTLINE=$( echo "${TMPOUT}" | tail -1 )
+    if [ "${LASTLINE}" = "No PDs listed" ] || [ "${LASTLINE}" = "0,0" ]
     then
-        echo No FC disks
+        echo "No FC disks"
         exit 0
     fi
 
-    TOTCAPFC=$( echo "$TMPOUT" | tail -1 | cut -d, -f1 )
-    FREECAPFC=$( echo "$TMPOUT" | tail -1 | cut -d, -f2 )
-    USEDCAPPCFC="$(( 100 - ( ( $FREECAPFC * 100 ) / $TOTCAPFC ) ))"
-    USEDCAPFC=$((($TOTCAPFC-$FREECAPFC)))
-    WARNCAPFCRAW=$(($TOTCAPFC*$PCWARNINGFC/100))
-    CRITCAPFCRAW=$(($TOTCAPFC*$PCCRITICALFC/100))
-    #TOTCAPFCGB=$(($TOTCAPFC/1024))
+    TOTCAPFC=$( echo "${TMPOUT}" | tail -1 | cut -d, -f1 )
+    FREECAPFC=$( echo "${TMPOUT}" | tail -1 | cut -d, -f2 )
+    USEDCAPPCFC="$(( 100 - ( ( ${FREECAPFC} * 100 ) / ${TOTCAPFC} ) ))"
+    USEDCAPFC=$(((${TOTCAPFC}-${FREECAPFC})))
+    WARNCAPFCRAW=$((${TOTCAPFC}*${PCWARNINGFC}/100))
+    CRITCAPFCRAW=$((${TOTCAPFC}*${PCCRITICALFC}/100))
+    #TOTCAPFCGB=$((${TOTCAPFC}/1024))
 
-    if [ "$USEDCAPPCFC" -ge "$PCCRITICALFC" ]
+    if [ "${USEDCAPPCFC}" -ge "${PCCRITICALFC}" ]
     then
-        echo CRITICAL! Used FC capacity = $USEDCAPPCFC\% \( \> $PCCRITICALFC\% \)\|UsedSpace=$USEDCAPPCFC\%\;$PCWARNINGFC\;$PCCRITICALFC UsedSpace=$USEDCAPFC\MB\;$WARNCAPFCRAW\;$CRITCAPFCRAW\;0\;$TOTCAPFC
+        echo "CRITICAL! Used FC capacity = ${USEDCAPPCFC}\% \( \> ${PCCRITICALFC}\% \)\|UsedSpace=${USEDCAPPCFC}\%\;${PCWARNINGFC}\;${PCCRITICALFC} UsedSpace=${USEDCAPFC}\MB\;${WARNCAPFCRAW}\;${CRITCAPFCRAW}\;0\;${TOTCAPFC}"
         exit 2
     else
-        if [ "$USEDCAPPCFC" -ge "$PCWARNINGFC" ]
+        if [ "${USEDCAPPCFC}" -ge "${PCWARNINGFC}" ]
         then
-            echo WARNING! Used FC capacity = $USEDCAPPCFC\% \( \> $PCWARNINGFC\% \)\|UsedSpace=$USEDCAPPCFC\%\;$PCWARNINGFC\;$PCCRITICALFC UsedSpace=$USEDCAPFC\MB\;$WARNCAPFCRAW\;$CRITCAPFCRAW\;0\;$TOTCAPFC
+            echo "WARNING! Used FC capacity = ${USEDCAPPCFC}\% \( \> ${PCWARNINGFC}\% \)\|UsedSpace=${USEDCAPPCFC}\%\;${PCWARNINGFC}\;${PCCRITICALFC} UsedSpace=${USEDCAPFC}\MB\;${WARNCAPFCRAW}\;${CRITCAPFCRAW}\;0\;${TOTCAPFC}"
             exit 1
         else
 
-            echo OK : Used FC capacity = $USEDCAPPCFC\%\|UsedSpace=$USEDCAPPCFC\%\;$PCWARNINGFC\;$PCCRITICALFC UsedSpace=$USEDCAPFC\MB\;$WARNCAPFCRAW\;$CRITCAPFCRAW\;0\;$TOTCAPFC
+            echo "OK : Used FC capacity = ${USEDCAPPCFC}\%\|UsedSpace=${USEDCAPPCFC}\%\;${PCWARNINGFC}\;${PCCRITICALFC} UsedSpace=${USEDCAPFC}\MB\;${WARNCAPFCRAW}\;${CRITCAPFCRAW}\;0\;${TOTCAPFC}"
             exit 0
         fi
     fi
 fi
 
-if [ "$COMMAND" == "check_cap_nl" ]
+if [ "${COMMAND}" == "check_cap_nl" ]
 then
-    TMPOUT=$( $CONNECTCOMMAND showpd -p -devtype NL -showcols Size_MB,Free_MB -csvtable 2>&1 )
+    TMPOUT=$( ${CONNECTCOMMAND} showpd -p -devtype NL -showcols Size_MB,Free_MB -csvtable 2>&1 )
     if [ $? -gt 0 ]
     then
-        echo Could not connect to 3PAR $INSERV
+        echo "Could not connect to 3PAR ${INSERV}"
         exit 3
     fi
 
-    LASTLINE=$(echo "$TMPOUT" | tail -1 )
-    if [ "$LASTLINE" = "No PDs listed" ] || [ "$LASTLINE" = "0,0" ]
+    LASTLINE=$(echo "${TMPOUT}" | tail -1 )
+    if [ "${LASTLINE}" = "No PDs listed" ] || [ "${LASTLINE}" = "0,0" ]
     then
-        echo No NL disks
+        echo "No NL disks"
         exit 0
     fi
 
-    TOTCAPNL=$( echo "$TMPOUT" | tail -1 | cut -d, -f1 )
-    FREECAPNL=$( echo "$TMPOUT" | tail -1 | cut -d, -f2 )
-    USEDCAPPCNL="$(( 100 - ( ( $FREECAPNL * 100 ) / $TOTCAPNL ) ))"
+    TOTCAPNL=$( echo "${TMPOUT}" | tail -1 | cut -d, -f1 )
+    FREECAPNL=$( echo "${TMPOUT}" | tail -1 | cut -d, -f2 )
+    USEDCAPPCNL="$(( 100 - ( ( ${FREECAPNL} * 100 ) / ${TOTCAPNL} ) ))"
 
-    if [ "$USEDCAPPCNL" -ge "$PCCRITICALNL" ]
+    if [ "${USEDCAPPCNL}" -ge "${PCCRITICALNL}" ]
     then
-        echo CRITICAL! Used NL capacity = $USEDCAPPCNL\% \( \> $PCCRITICALNL\% \)
+        echo "CRITICAL! Used NL capacity = ${USEDCAPPCNL}\% \( \> ${PCCRITICALNL}\% \)"
         exit 2
     else
-        if [ "$USEDCAPPCNL" -ge "$PCWARNINGNL" ]
+        if [ "${USEDCAPPCNL}" -ge "${PCWARNINGNL}" ]
         then
-            echo WARNING! Used NL capacity = $USEDCAPPCNL\% \( \> $PCWARNINGNL\% \)
+            echo "WARNING! Used NL capacity = ${USEDCAPPCNL}\% \( \> ${PCWARNINGNL}\% \)"
             exit 1
         else
-            echo OK : Used NL capacity = $USEDCAPPCNL\%
+            echo "OK : Used NL capacity = ${USEDCAPPCNL}\%"
             exit 0
         fi
     fi
 fi
 
-if [ $COMMAND == "check_volume" ]
+if [ ${COMMAND} == "check_volume" ]
 then
 
-    if [ "$CMDARG1" == "" ]
+    if [ "${CMDARG1}" == "" ]
     then
         echo "Command 'check_volume' needs VOLUMENAME as additional parameter."
         exit 3
     fi
 
-    TMPOUT=$( $CONNECTCOMMAND showvv $CMDARG1 -csvtable 2>&1 )
+    TMPOUT=$( ${CONNECTCOMMAND} showvv ${CMDARG1} -csvtable 2>&1 )
     if [ $? -gt 0 ]
     then
-        echo "Could not connect to 3PAR $INSERV"
+        echo "Could not connect to 3PAR ${INSERV}"
         exit 3
     fi
 
-    LASTLINE=$(echo "$TMPOUT" | tail -1 )
-    if [ "$LASTLINE" = "no vv listed" ]
+    LASTLINE=$(echo "${TMPOUT}" | tail -1 )
+    if [ "${LASTLINE}" = "no vv listed" ]
     then
-        echo No such volume: $CMDARG1
+        echo "No such volume: ${CMDARG1}"
         exit 0
     fi
 
-    TMPOUT=$( echo "$TMPOUT" | grep ",base," | grep ",${CMDARG1}," )
+    TMPOUT=$( echo "${TMPOUT}" | grep ",base," | grep ",${CMDARG1}," )
 
-    VSIZE=$( echo "$TMPOUT" | cut -d, -f12 )
-    VSIZE_Gb="$(( $VSIZE / 1024 ))"
+    VSIZE=$( echo "${TMPOUT}" | cut -d, -f12 )
+    VSIZE_Gb="$(( ${VSIZE} / 1024 ))"
 
-    USED=$( echo "$TMPOUT" | cut -d, -f11 )
-    USED_Gb="$(( $USED / 1024 ))"
+    USED=$( echo "${TMPOUT}" | cut -d, -f11 )
+    USED_Gb="$(( ${USED} / 1024 ))"
 
-    FREE="$(( $VSIZE - $USED ))"
-    FREE_Gb="$(( $FREE / 1024 ))"
+    FREE="$(( ${VSIZE} - ${USED} ))"
+    FREE_Gb="$(( ${FREE} / 1024 ))"
 
-    FREEPERCENT="$((  100 - ( ( $USED * 100 ) / $VSIZE ) ))"
-    USEDPERCENT="$((  100 - ( $FREEPERCENT ) ))"
+    FREEPERCENT="$((  100 - ( ( ${USED} * 100 ) / ${VSIZE} ) ))"
+    USEDPERCENT="$((  100 - ( ${FREEPERCENT} ) ))"
 
-    WARNCRAW="$(( $VSIZE*$WARNING/100))"
-    WARNCRAW_Gb="$(( $WARNCRAW / 1024 ))"
+    WARNCRAW="$(( ${VSIZE}*${WARNING}/100))"
+    WARNCRAW_Gb="$(( ${WARNCRAW} / 1024 ))"
 
-    CRITCCRAW="$(( $VSIZE*$CRITICAL/100 ))"
-    CRITCCRAW_Gb="$(( $CRITCCRAW / 1024 ))"
+    CRITCCRAW="$(( ${VSIZE}*${CRITICAL}/100 ))"
+    CRITCCRAW_Gb="$(( ${CRITCCRAW} / 1024 ))"
 
-    MSG="TOTAL: ${VSIZE}Mb USED: ${USED}Mb ($USEDPERCENT%) FREE: ${FREE}Mb ($FREEPERCENT%) TotSize=${VSIZE_Gb}Gb Used=${USED_Gb}Gb, Warn on used: ${WARNCRAW_Gb}Gb, Critical on Used: ${CRITCCRAW_Gb}Gb"
+    MSG="TOTAL: ${VSIZE}Mb USED: ${USED}Mb (${USED}PERCENT%) FREE: ${FREE}Mb (${FREEPERCENT}%) TotSize=${VSIZE_Gb}Gb Used=${USED_Gb}Gb, Warn on used: ${WARNCRAW_Gb}Gb, Critical on Used: ${CRITCCRAW_Gb}Gb"
 
-    if [ $USED_Gb -ge $CRITCCRAW_Gb ]
+    if [ ${USED_Gb} -ge ${CRITCCRAW_Gb} ]
     then
-        echo "CRITICAL: $MSG"
+        echo "CRITICAL: ${MSG}"
         exit 2
     else
-        if [ $USED_Gb -ge $WARNCRAW_Gb ]
+        if [ ${USED_Gb} -ge ${WARNCRAW_Gb} ]
         then
-            echo "WARNING: $MSG"
+            echo "WARNING: ${MSG}"
             exit 1
         else
 
-            echo "OK: $MSG"
+            echo "OK: ${MSG}"
             exit 0
         fi
     fi
 fi 
 
-if [ "$COMMAND" == "check_qw" ]
+if [ "${COMMAND}" == "check_qw" ]
 then
-    if [ "$CMDARG1" == "" ]
+    if [ "${CMDARG1}" == "" ]
     then
         output "UNKN" "Command 'check_qw' needs QW IP as additional parameter."
     fi
 
-    TMPOUT=$( $CONNECTCOMMAND setrcopytarget witness check $CMDARG1 2>&1 )
-    if [ $( echo "$TMPOUT" | grep -c "Connectivity check passed" ) -eq 0 ]
+    TMPOUT=$( ${CONNECTCOMMAND} setrcopytarget witness check ${CMDARG1} 2>&1 )
+    if [ $( echo "${TMPOUT}" | grep -c "Connectivity check passed" ) -eq 0 ]
     then
-        output "UNKN" "$TMPOUT"
+        output "UNKN" "${TMPOUT}"
     fi
 
-    TMPOUT=$( $CONNECTCOMMAND showrcopy -qw targets 2>&1 )
-    if [ $( echo "$TMPOUT" | grep -i " $CMDARG1 " | grep -c Started ) -gt 0 ]
+    TMPOUT=$( ${CONNECTCOMMAND} showrcopy -qw targets 2>&1 )
+    if [ $( echo "${TMPOUT}" | grep -i " ${CMDARG1} " | grep -c Started ) -gt 0 ]
     then
         output "OK" "Quorum Witness normal status"
     else
         output "WARN" $( echo "Quorum Witness has problems" ; \
-                         echo " $TMPOUT " ; )
+                         echo " ${TMPOUT} " ; )
     fi
 fi
 
-if [ "$COMMAND" == "check_alerts" ]
+if [ "${COMMAND}" == "check_alerts" ]
 then
-	TMPOUT=$( $CONNECTCOMMAND showalert 2>&1 )
+	TMPOUT=$( ${CONNECTCOMMAND} showalert 2>&1 )
 	if [ $? -gt 0 ]
 	then
-		echo Could not connect to InServ $INSERV
+		echo "Could not connect to InServ ${INSERV}"
 		exit 3
 	fi
 
-	if [ $( echo "$TMPOUT" |  grep -c -i fatal ) -gt 0 ] || [ $( echo "$TMPOUT" |  grep -c -i critical ) -gt 0 ] || [ $( echo "$TMPOUT" |  grep -c -i major ) -gt 0 ]
+	if [ $( echo "${TMPOUT}" |  grep -c -i fatal ) -gt 0 ] || [ $( echo "${TMPOUT}" |  grep -c -i critical ) -gt 0 ] || [ $( echo "${TMPOUT}" |  grep -c -i major ) -gt 0 ]
 	then
 		echo "CRITICAL! The system has fatal/critical/major level alerts. Please check immediately" 
 		exit 2
 	else
-		if [ $( echo "$TMPOUT" | grep -c -i minor ) -gt 0 ] || [ $( echo "$TMPOUT" |  grep -c -i degraded ) -gt 0 ]
+		if [ $( echo "${TMPOUT}" | grep -c -i minor ) -gt 0 ] || [ $( echo "${TMPOUT}" |  grep -c -i degraded ) -gt 0 ]
 		then
 			echo "WARNING! The system has minor/degraded level alerts. Please check asap" 
 			exit 1
 		else
-			echo OK : No alarms
+			echo "OK : No alarms"
 			exit 0
 		fi
 	fi
 fi
 
-if [ "$COMMAND" == "check_health" ]
+if [ "${COMMAND}" == "check_health" ]
 then
-	TMPOUT=$( $CONNECTCOMMAND checkhealth -quiet 2>&1 )
+	TMPOUT=$( ${CONNECTCOMMAND} checkhealth -quiet 2>&1 )
 	if [ $? -gt 0 ]
 	then
-		echo Could not connect to InServ $INSERV
+		echo "Could not connect to InServ ${INSERV}"
 		exit 3
 	fi
 
-	if [ $( echo "$TMPOUT" | grep total | awk '{print $1}'  ) -gt 0 ] 
+	if [ $( echo "${TMPOUT}" | grep total | awk '{print $1}'  ) -gt 0 ] 
 	then
 		echo "WARNING! The system is not healthy. Please check."
-		echo "$TMPOUT"
+		echo "${TMPOUT}"
 		exit 1
 	else
-		echo OK : System is healthy
+		echo "OK : System is healthy"
 		exit 0
 	fi
 fi
 
-usage "ERROR Wrong command '$COMMAND' ."
-exit $RETUNKN
+usage "ERROR Wrong command '${COMMAND}' ."
+exit ${RETUNKN}
 
 
 # vim: tabstop=4 softtabstop=4 shiftwidth=4 expandtab:
