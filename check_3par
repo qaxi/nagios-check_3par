@@ -41,7 +41,7 @@ PRGNAME=$(basename "$0")
 DBG="n"
 function dbg() { [ "${DBG}" = "y" ] && echo "DBG: $*" >&2 ; }
 
-OPTS=':hH:i:u:k:p:w:c:d-:'   # first : and lsast - is mandatory
+OPTS=':hH:i:u:k:p:w:c:vd-:'   # first : and lsast - is mandatory
 function usage() {
     [ -n "$*" ] && {
         exec 1>&2   # redirect STDOUT to STDERR for rest of script
@@ -159,6 +159,7 @@ while getopts "${OPTS}" OPTION ; do
     dbg "option ${OPTION} optind ${OPTIND} optarg ${OPTARG:-}"
     case "${OPTION}" in
         d  ) DBG="y";;
+        v  ) usage "Not implemented yet" ;;
         h  ) usage ;;   
         H  ) INSERV="${OPTARG}" ;;
         i  ) INFORMBIN="${OPTARG}" ;;
@@ -174,6 +175,7 @@ while getopts "${OPTS}" OPTION ; do
             dbg "- option ${OPTION} optind ${OPTIND} optarg ${OPTARG}"
             case ${OPTION} in
                 --debug )           DBG="y" ;;
+                --verbose)          usage "Not implemented yet" ;;
                 --help )            helplong ;;
                 --hostname )        INSERV="${OPTARG}" ;;
                 --inform-bin )      INFORMBIN="${OPTARG}" ;;
@@ -235,7 +237,7 @@ COMMAND="${1:-}"
 [ -z "${COMMAND}" ] && usage "COMMAND is not set"
 
 CMDARG1="${2:-}"
-
+VERBOSE="${VERBOSE-0}"
 TMPOUT=""
 PCCRITICALFC="${CAPCRIT}"
 PCWARNINGFC="${CAPWARN}"
@@ -257,14 +259,14 @@ else
     # Note : connecting using SSH requires setting public key authentication
     if [ -n "${USERNAME:-}" ]
     then
-    	usage "Use either -u <username> or -i <inform_bin>"
-    else
-        if [ -n "${KEYFILE}" ]
+        if [ -n "${KEYFILE:-}" ]
         then
             CONNECTCOMMAND="ssh ${USERNAME}@${INSERV} -i ${KEYFILE} "
         else
-            CONNECTCOMMAND="ssh ${USERNAME}@{$INSERV} "
+            CONNECTCOMMAND="ssh ${USERNAME}@${INSERV} "
         fi
+    else
+    	usage "Use either -u <username> or -i <inform_bin>"
     fi
 fi
 
@@ -392,7 +394,7 @@ then
 
     if [ $( echo "$TMPOUT" | grep -c -i failed ) -gt 0 ]
     then
-        case $VERBOSE in
+        case ${VERBOSE} in
                 0) output CRITICAL There are failed VVs \
                     "$( echo "$TMPOUT" | grep -c -i failed )" Contact 3PAR support ;;
 
@@ -410,7 +412,7 @@ then
     else
         if [ $( echo "${TMPOUT}" | grep -c -i degraded ) -gt 0 ]
         then
-            case $VERBOSE in
+            case ${VERBOSE} in
                 0) output WARNING There are degraded VVs \
                     "$( echo "$TMPOUT" | grep -c -i degraded )" Contact 3PAR support ;;
 
@@ -426,7 +428,7 @@ then
                     output WARNING There are degraded VVs "\n$OKVOLUMES" ;;
             esac
         else
-            case $VERBOSE in
+            case ${VERBOSE} in
                 0)  output OK All $(echo "$TMPOUT" | wc -l ) VVs are normal ;;
                 
                 1)  OKVOLUMES=$(echo "$TMPOUT" | cut -f 2 -d " " | sort -n ) 
@@ -658,7 +660,7 @@ then
     CRITCCRAW="$(( ${VSIZE}*${CRITICAL}/100 ))"
     CRITCCRAW_Gb="$(( ${CRITCCRAW} / 1024 ))"
 
-    MSG="TOTAL: ${VSIZE}Mb USED: ${USED}Mb (${USED}PERCENT%) FREE: ${FREE}Mb (${FREEPERCENT}%) TotSize=${VSIZE_Gb}Gb Used=${USED_Gb}Gb, Warn on used: ${WARNCRAW_Gb}Gb, Critical on Used: ${CRITCCRAW_Gb}Gb"
+    MSG="TOTAL: ${VSIZE}Mb USED: ${USED}Mb (${USEDPERCENT}%) FREE: ${FREE}Mb (${FREEPERCENT}%) TotSize=${VSIZE_Gb}Gb Used=${USED_Gb}Gb, Warn on used: ${WARNCRAW_Gb}Gb, Critical on Used: ${CRITCCRAW_Gb}Gb"
 
     if [ ${USED_Gb} -ge ${CRITCCRAW_Gb} ]
     then
