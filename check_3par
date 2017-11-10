@@ -239,12 +239,8 @@ COMMAND="${1:-}"
 CMDARG1="${2:-}"
 VERBOSE="${VERBOSE-0}"
 TMPOUT=""
-PCCRITICALFC="${CAPCRIT}"
-PCWARNINGFC="${CAPWARN}"
-PCCRITICALNL="${CAPCRIT}"
-PCWARNINGNL="${CAPWARN}"
-PCCRITICALSSD="${CAPCRIT}"
-PCWARNINGSSD="${CAPWARN}"
+PCCRITICAL="${CAPCRIT}"
+PCWARNING="${CAPWARN}"
 CRITICAL="${CAPCRIT}"
 WARNING="${CAPWARN}"
 
@@ -457,9 +453,17 @@ then
     fi
 fi
 
-if [ "${COMMAND}" == "check_cap_ssd" ]
+if [   "${COMMAND}" == "check_cap_ssd" \
+    -o "${COMMAND}" == "check_cap_fc" \
+    -o "${COMMAND}" == "check_cap_nl" ]
 then
-    TMPOUT=$( ${CONNECTCOMMAND} showpd -p -devtype SSD -showcols Size_MB,Free_MB -csvtable 2>&1 )
+    case "${COMMAND}" in
+        "check_cap_ssd") TYPE="SSD" ;;
+        "check_cap_fc")  TYPE="FC"  ;;
+        "check_cap_nl")  TYPE="NL"  ;;
+    esac
+
+    TMPOUT=$( ${CONNECTCOMMAND} showpd -p -devtype ${TYPE} -showcols Size_MB,Free_MB -csvtable 2>&1 )
     if [ $? -gt 0 ]
     then
         output UNKNOWN "Could not connect to 3PAR ${INSERV}"
@@ -468,96 +472,29 @@ then
     LASTLINE=$( echo "${TMPOUT}" | tail -1 )
     if [ "${LASTLINE}" = "No PDs listed" ] || [ "${LASTLINE}" = "0,0" ]
     then
-         output OK "No SSD disks"
+        output UNKNOWN "No ${TYPE} disks"
     fi
 
-    TOTCAPSSD=$( echo "${TMPOUT}" | tail -1 | cut -d, -f1 )
-    FREECAPSSD=$( echo "${TMPOUT}" | tail -1 | cut -d, -f2 )
-    USEDCAPPCSSD="$(( 100 - ( ( ${FREECAPSSD} * 100 ) / ${TOTCAPSSD} ) ))"
-    USEDCAPSSD=$(((${TOTCAPSSD}-${FREECAPSSD})))
-    WARNCAPSSDRAW=$((${TOTCAPSSD}*${PCWARNINGSSD}/100))
-    CRITCAPSSDRAW=$((${TOTCAPSSD}*${PCCRITICALSSD}/100))
-    #TOTCAPSSDGB=$((${TOTCAPSSD}/1024))
+    TOTCAP=$( echo "${TMPOUT}" | tail -1 | cut -d, -f1 )
+    FREECAP=$( echo "${TMPOUT}" | tail -1 | cut -d, -f2 )
+    USEDCAPPC="$(( 100 - ( ( ${FREECAP} * 100 ) / ${TOTCAP} ) ))"
+    USEDCAP=$(((${TOTCAP}-${FREECAP})))
+    WARNCAPRAW=$((${TOTCAP}*${PCWARNING}/100))
+    CRITCAPRAW=$((${TOTCAP}*${PCCRITICAL}/100))
+    USEDCAPGB=$((${USEDCAP}/1024))
 
-    if [ "${USEDCAPPCSSD}" -ge "${PCCRITICALSSD}" ]
+    PERFMSG="|UsedSpace=${USEDCAPPC}%;${PCWARNING};${PCCRITICAL}"
+    PERFMSG="${PERFMSG} UsedSpace=${USEDCAP}MB;${WARNCAPRAW};${CRITCAPRAW};0;${TOTCAP}"
+
+    if [ "${USEDCAPPC}" -ge "${PCCRITICAL}" ]
     then
-        output CRITICAL "Used SSD capacity = ${USEDCAPPCSSD}% ( > ${PCCRITICALSSD}% )|UsedSpace=${USEDCAPPCSSD}%;${PCWARNINGSSD};${PCCRITICALSSD} UsedSpace=${USEDCAPSSD}MB;${WARNCAPSSDRAW};${CRITCAPSSDRAW};0;${TOTCAPSSD}"
+        output CRITICAL "Used ${TYPE} capacity ${USEDCAPGB}GB (${USEDCAPPC}%) ${PERFMSG}"
     else
-        if [ "${USEDCAPPCSSD}" -ge "${PCWARNINGSSD}" ]
+        if [ "${USEDCAPPC}" -ge "${PCWARNING}" ]
         then
-            output WARNING "Used SSD capacity = ${USEDCAPPCSSD}% ( > ${PCWARNINGSSD}% )|UsedSpace=${USEDCAPPCSSD}%;${PCWARNINGSSD};${PCCRITICALSSD} UsedSpace=${USEDCAPSSD}MB;${WARNCAPSSDRAW};${CRITCAPSSDRAW};0;${TOTCAPSSD}"
+            output WARNING "Used ${TYPE} capacity ${USEDCAPGB}GB (${USEDCAPPC}%) ${PERFMSG}"
         else
-
-            output OK "Used SSD capacity = ${USEDCAPPCSSD}% |UsedSpace=${USEDCAPPCSSD}%;${PCWARNINGSSD};${PCCRITICALSSD} UsedSpace=${USEDCAPSSD}MB;${WARNCAPSSDRAW};${CRITCAPSSDRAW};0;${TOTCAPSSD}"
-        fi
-    fi
-fi
-
-if [ "${COMMAND}" == "check_cap_fc" ]
-then
-    TMPOUT=$( ${CONNECTCOMMAND} showpd -p -devtype FC -showcols Size_MB,Free_MB -csvtable 2>&1 )
-    if [ $? -gt 0 ]
-    then
-        output UNKNOWN "Could not connect to 3PAR ${INSERV}"
-    fi
-
-    LASTLINE=$( echo "${TMPOUT}" | tail -1 )
-    if [ "${LASTLINE}" = "No PDs listed" ] || [ "${LASTLINE}" = "0,0" ]
-    then
-        output UNKNOWN "No FC disks"
-    fi
-
-    TOTCAPFC=$( echo "${TMPOUT}" | tail -1 | cut -d, -f1 )
-    FREECAPFC=$( echo "${TMPOUT}" | tail -1 | cut -d, -f2 )
-    USEDCAPPCFC="$(( 100 - ( ( ${FREECAPFC} * 100 ) / ${TOTCAPFC} ) ))"
-    USEDCAPFC=$(((${TOTCAPFC}-${FREECAPFC})))
-    WARNCAPFCRAW=$((${TOTCAPFC}*${PCWARNINGFC}/100))
-    CRITCAPFCRAW=$((${TOTCAPFC}*${PCCRITICALFC}/100))
-    #TOTCAPFCGB=$((${TOTCAPFC}/1024))
-
-    PERFMSG="|UsedSpace=${USEDCAPPCFC}%;${PCWARNINGFC};${PCCRITICALFC}" \
-       "UsedSpace=${USEDCAPFC}MB;${WARNCAPFCRAW};${CRITCAPFCRAW};0;${TOTCAPFC}"
-
-    if [ "${USEDCAPPCFC}" -ge "${PCCRITICALFC}" ]
-    then
-        output CRITICAL "Used FC capacity = ${USEDCAPPCFC}% (> ${PCCRITICALFC}%) ${PERFMSG}"
-    else
-        if [ "${USEDCAPPCFC}" -ge "${PCWARNINGFC}" ]
-        then
-            output WARNING "Used FC capacity = ${USEDCAPPCFC}% (> ${PCWARNINGFC}%) ${PERFMSG}"
-        else
-            output OK "Used FC capacity = ${USEDCAPPCFC}% ${PERFMSG}"
-        fi
-    fi
-fi
-
-if [ "${COMMAND}" == "check_cap_nl" ]
-then
-    TMPOUT=$( ${CONNECTCOMMAND} showpd -p -devtype NL -showcols Size_MB,Free_MB -csvtable 2>&1 )
-    if [ $? -gt 0 ]
-    then
-        output UNKNOWN "Could not connect to 3PAR ${INSERV}"
-    fi
-
-    LASTLINE=$(echo "${TMPOUT}" | tail -1 )
-    if [ "${LASTLINE}" = "No PDs listed" ] || [ "${LASTLINE}" = "0,0" ]
-    then
-        output UNKNOWN "No NL disks"
-    fi
-
-    TOTCAPNL=$( echo "${TMPOUT}" | tail -1 | cut -d, -f1 )
-    FREECAPNL=$( echo "${TMPOUT}" | tail -1 | cut -d, -f2 )
-    USEDCAPPCNL="$(( 100 - ( ( ${FREECAPNL} * 100 ) / ${TOTCAPNL} ) ))"
-
-    if [ "${USEDCAPPCNL}" -ge "${PCCRITICALNL}" ]
-    then
-        output CRITICAL "Used NL capacity = ${USEDCAPPCNL}% (> ${PCCRITICALNL}%)"
-    else
-        if [ "${USEDCAPPCNL}" -ge "${PCWARNINGNL}" ]
-        then
-            output WARNING "Used NL capacity = ${USEDCAPPCNL}% (> ${PCWARNINGNL}%)"
-        else
-            output OK "Used NL capacity = ${USEDCAPPCNL}%"
+            output OK "Used ${TYPE} capacity ${USEDCAPGB}GB (${USEDCAPPC}%) ${PERFMSG}"
         fi
     fi
 fi
