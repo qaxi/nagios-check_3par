@@ -600,13 +600,23 @@ fi
 
 if [ "${COMMAND}" == "check_health" ]
 then
-	TMPOUT=$( ${CONNECTCOMMAND} checkhealth -quiet 2>&1 )
+	if [ "${CMDARG1}" != "" ]
+    then
+    	CMDARG1=$( echo "${CMDARG1}" | tr ',' '|' )
+    	TMPOUT=$( ${CONNECTCOMMAND} checkhealth -list 2>&1 )
+    	CMDARG1=$( echo "${TMPOUT}" | awk '{print $1}' | grep '^[a-z]' | egrep -v "${CMDARG1}" | paste -sd " " - ) 
+    	TMPOUT=$( ${CONNECTCOMMAND} checkhealth -quiet ${CMDARG1} 2>&1 )
+    else
+		TMPOUT=$( ${CONNECTCOMMAND} checkhealth -quiet 2>&1 )
+	fi
+	
 	if [ $? -gt 0 ]
 	then
 		output UNKNOWN "Could not connect to InServ ${INSERV}"
 	fi
-
-	if [ $( echo "${TMPOUT}" | grep total | awk '{print $1}'  ) -gt 0 ] 
+	
+	TOTAL=$( echo "${TMPOUT}" | grep total | awk '{print $1}' )
+	if [[ -n "$TOTAL" && $TOTAL -gt 0 ]] 
 	then
 		output WARNING "The system is not healthy. Please check."
 		echo "${TMPOUT}"
@@ -614,7 +624,6 @@ then
 		output OK "System is healthy"
 	fi
 fi
-
 usage "ERROR Wrong command '${COMMAND}' ."
 exit ${RETUNKN}
 
