@@ -1,12 +1,3 @@
-# Moved to GITLab
-
-https://gitlab.com/qaxi/nagios-check_3par
-
-
-
-
-
-
 # Nagios check_3par
 
 Basic support for monitoring HP 3PAR arrays by Nagios
