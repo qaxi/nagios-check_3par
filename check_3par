@@ -616,7 +616,7 @@ then
 		output UNKNOWN "Could not connect to InServ ${INSERV}"
 	fi
 	
-	TOTAL=$( echo "${TMPOUT}" | grep total | awk '{print $1}' )
+	TOTAL=$( echo "${TMPOUT}" | grep -v "total node" | grep total | awk '{print $1}' )
 	if [[ -n "$TOTAL" && $TOTAL -gt 0 ]] 
 	then
 		output WARNING "The system is not healthy. Please check."
