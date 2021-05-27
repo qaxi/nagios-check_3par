@@ -12,6 +12,7 @@
 # Last update 2017/12/14 qaxi@seznam.cz https://github.com/qaxi/nagios-check_3par
 # Last update 2017/12/15 dsbibby https://github.com/dsbibby/nagios-check_3par
 # Last update 2021/03/17 mkuerschner https://github.com/mkuerschner
+# Last update 2021/05/27 Petr Fischer https://github.com/petr-fischer
 #
 # This script is provided "as is" without warranty of any kind and 3PAR 
 # specifically disclaims all implied warranties of merchantability, 
@@ -24,7 +25,7 @@
 # to this script
 #
 
-VERSION="1.4"
+VERSION="1.5"
 CAPWARN=80  # warning at 80% of used disc capacity
 CAPCRIT=90  # warnint at 90% of user disc capacity
 VERBOSE=0   # how verbose to be
