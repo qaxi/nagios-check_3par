@@ -280,7 +280,7 @@ then
         output CRITICAL "The following PDs have abnormal status : " \
             "$( echo "${TMPOUT}" | grep -v normal | tr -d '\n' )"
     else
-        if [ $( echo "${TMPOUT}" | grep -c failed ) -gt 0 ]
+        if [ $( echo "${TMPOUT}" | grep -c degraded ) -gt 0 ]
         then    
             output WARNING "The following PDs have abnormal status : " \
                 "$( echo "${TMPOUT}" | grep -v normal | tr -d '\n' )"
